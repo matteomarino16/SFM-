@@ -45,8 +45,9 @@
   --line-soft: var(--c-800);
 
   /* Font */
-  --font-serif: "Cormorant Garamond", "Playfair Display", "Didot", "Bodoni 72", Georgia, "Times New Roman", serif;
-  --font-sans: "Manrope", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+  /* Helvetica per tutto il sito (Arial su Windows/Android, dove Helvetica non è installato) */
+  --font-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   /* Scala tipografica fluida */
   --fs-xs: .72rem;
@@ -335,6 +336,16 @@ p + p { margin-top: var(--space-md); }
   -webkit-backdrop-filter: blur(14px) saturate(120%);
   backdrop-filter: blur(14px) saturate(120%);
   border-bottom-color: var(--line-soft);
+}
+
+/* Su telefoni e tablet la sfocatura (backdrop-filter) sopra la scena 3D è
+   costosa: si usa uno sfondo quasi opaco, visivamente equivalente */
+@media (max-width: 959px), (pointer: coarse) {
+  .site-header.is-scrolled {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: rgba(0, 0, 0, .94);
+  }
 }
 
 /* Con il menu mobile aperto il blur va tolto: backdrop-filter renderebbe

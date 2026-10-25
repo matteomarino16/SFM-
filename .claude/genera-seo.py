@@ -21,7 +21,8 @@ AZIENDA = {
     'nome': 'S.F.M. Distribuzione',
     'alias': ['SFM Distribuzioni', 'SFM Vini d\'eccellenza', 'SFM'],
     'slogan': 'Un viaggio nel mondo del vino',
-    'telefono': '+39 338 469 3769',
+    'telefono': '+39 349 063 0846',
+    'whatsapp': '+39 338 469 3769',
     'email': 'info@sfmdistribuzioni.com',
     'piva': 'IT00000000000',                  # DA INSERIRE
     'indirizzo': {                            # sede: città di Ferrara (senza via)
@@ -174,7 +175,7 @@ def build_graph(prodotti, eventi):
                 'itemOffered': {'@type': 'Service', 'name': n, 'description': d, 'provider': {'@id': org_id}},
             } for n, d in servizi],
             'hasOfferCatalog': catalogo,
-            'sameAs': [a['instagram'], f"https://wa.me/{a['telefono'].replace('+', '').replace(' ', '')}"],
+            'sameAs': [a['instagram'], f"https://wa.me/{a['whatsapp'].replace('+', '').replace(' ', '')}"],
         },
         {
             '@type': 'WebSite',
@@ -300,15 +301,11 @@ def build_head(graph):
   <!-- Segnala subito che JS è attivo (evita il "flash" delle animazioni di comparsa) -->
   <script>document.documentElement.className = document.documentElement.className.replace('no-js', 'js');</script>
 
-  <!-- Prestazioni: connessioni anticipate e logo d'apertura (elemento più grande) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Prestazioni: connessione anticipata e logo d'apertura (elemento più grande) -->
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
   <link rel="preload" as="image" href="assets/logo-monogramma.png" fetchpriority="high">
 
-  <!-- Font: Cormorant Garamond (titoli) + Manrope (testo) -->
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
-
+  <!-- Font: Helvetica di sistema (nessun font esterno da scaricare) -->
   <link rel="stylesheet" href="style.css">
 
   <!-- Three.js (versione fissata r128) + script del sito, entrambi in defer -->

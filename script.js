@@ -1383,6 +1383,17 @@
     }
     const THREE = window.THREE;
 
+    // --- Profilo prestazioni -------------------------------------------------
+    // Su telefoni, tablet e dispositivi con poca CPU/RAM si usa una versione
+    // più leggera della scena (risoluzione, materiali, geometrie, particelle).
+    const isMobile = window.matchMedia('(max-width: 767px)').matches;
+    const lowPower = isMobile
+      || window.matchMedia('(pointer: coarse)').matches
+      || (navigator.hardwareConcurrency || 8) <= 4
+      || (navigator.deviceMemory || 8) <= 4;
+    const MAX_DPR = lowPower ? 1.5 : 2;          // densità massima dei pixel
+    let dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+
     // --- Renderer -----------------------------------------------------------
     let renderer;
     try {
@@ -1396,7 +1407,6 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
 
-    const isMobile = window.matchMedia('(max-width: 767px)').matches;
     const sideQuery = window.matchMedia(HERO_SIDE_QUERY);
 
     // --- Scena e camera -----------------------------------------------------
@@ -1462,18 +1472,16 @@
     [[0.29, 5.15], [0.285, 5.6], [0.33, 5.64], [0.345, 5.72], [0.345, 5.9], [0.33, 5.97], [0.3, 6.0], [0, 6.0]]
       .forEach(([x, y]) => add(x, y));
 
-    const segments = isMobile ? 72 : 144;
+    const segments = lowPower ? 56 : 144;
     const bottle = new THREE.Group();
     const bodyGeo = new THREE.LatheGeometry(profile, segments);
 
     // Vetro scuro lucido
-    const glassMat = new THREE.MeshPhysicalMaterial({
+    const glassMat = new (lowPower ? THREE.MeshStandardMaterial : THREE.MeshPhysicalMaterial)({
       color: HERO_BOTTLE.vetro,
       metalness: 0,
       roughness: 0.05,
-      clearcoat: 1,
-      clearcoatRoughness: 0.02,
-      reflectivity: 0.7,
+      ...(lowPower ? {} : { clearcoat: 1, clearcoatRoughness: 0.02, reflectivity: 0.7 }),
       envMap,
       envMapIntensity: 1.9
     });
@@ -1540,7 +1548,7 @@
         const c = capCanvas.getContext('2d');
         c.clearRect(0, 0, 1024, 96);
         c.fillStyle = '#e8e8e8';
-        c.font = '600 46px Manrope, "Helvetica Neue", Arial, sans-serif';
+        c.font = '600 46px "Helvetica Neue", Helvetica, Arial, sans-serif';
         c.textAlign = 'center';
         c.textBaseline = 'middle';
         if ('letterSpacing' in c) c.letterSpacing = '6px';
@@ -1561,7 +1569,7 @@
     // In CylinderGeometry theta = 0 punta verso +z (la camera), quindi la
     // fronte è centrata su 0 e il retro su PI.
     const loader = new THREE.TextureLoader();
-    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), lowPower ? 4 : 8);
     const addLabel = (url, { height, arc, centerY, facing }) => {
       const thetaLength = arc / BODY_R;
       const geo = new THREE.CylinderGeometry(BODY_R + 0.006, BODY_R + 0.006, height, segments, 1, true, facing - thetaLength / 2, thetaLength);
@@ -1629,7 +1637,7 @@
     scene.add(shadow);
 
     // --- Particelle ---------------------------------------------------------
-    const PARTICLES = isMobile ? 300 : 800;
+    const PARTICLES = lowPower ? 140 : 700;
     const AREA = { x: 14, y: 9, zMin: -10, zMax: 6 };
     const positions = new Float32Array(PARTICLES * 3);
     const speeds = new Float32Array(PARTICLES);
@@ -1710,10 +1718,17 @@
 
     const pose = (x, y, s, rotY, rotZ = 0, rotX = 0) => ({ x, y, s, rotY, rotZ, rotX });
 
-    const resize = () => {
+    let lastW = 0;
+    let lastH = 0;
+    const resize = (force) => {
       const w = hero.clientWidth;
       const h = hero.clientHeight;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      // Su telefono la barra degli indirizzi genera continui "resize" senza che
+      // l'hero (alto 100svh) cambi davvero: in quel caso non si ricalcola nulla.
+      if (force !== true && w === lastW && h === lastH) return;
+      lastW = w;
+      lastH = h;
+      renderer.setPixelRatio(dpr);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
 
@@ -1842,15 +1857,42 @@
       renderer.render(scene, camera);
     }
 
-    function loop() {
+    // Qualità adattiva: ogni 90 fotogrammi si misura la media; sotto i ~45 fps
+    // si riduce la densità dei pixel (fino a 1) e, se non basta, le particelle.
+    let frames = 0;
+    let frameTime = 0;
+    let lastStamp = 0;
+    const adapt = (now) => {
+      if (lastStamp) {
+        const ft = now - lastStamp;
+        if (ft < 250) { frameTime += ft; frames++; } // ignora le pause (scheda in background)
+      }
+      lastStamp = now;
+      if (frames < 90) return;
+      const avg = frameTime / frames;
+      frames = 0;
+      frameTime = 0;
+      if (avg <= 22) return;
+      if (dpr > 1) {
+        dpr = Math.max(1, Math.round((dpr - 0.25) * 100) / 100);
+        renderer.setPixelRatio(dpr);
+        renderer.setSize(lastW, lastH, false);
+      } else if (particles.visible) {
+        particles.visible = false;
+      }
+    };
+
+    function loop(now) {
       if (!running) return;
       rafId = requestAnimationFrame(loop);
+      adapt(now);
       renderFrame(Math.min(clock.getDelta(), 0.05));
     }
 
     function start() {
       if (running || prefersReducedMotion() || !heroVisible || document.hidden) return;
       running = true;
+      lastStamp = 0;
       clock.getDelta(); // azzera il delta accumulato durante la pausa
       rafId = requestAnimationFrame(loop);
     }
@@ -1895,9 +1937,9 @@
 
     // Fase iniziale dell'oscillazione: etichetta leggermente di tre quarti
     elapsed = -0.9;
-    resize();
+    resize(true);
     // I capitoli cambiano altezza quando arrivano i font: si ricalcola la posa
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resize(true));
     renderFrame(0);
     start();
   }

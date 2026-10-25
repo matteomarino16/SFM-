@@ -20,7 +20,7 @@ TITOLARE = {
     'indirizzo': 'Ferrara (FE)',
     'piva': '00000000000',
     'email': 'info@sfmdistribuzioni.com',
-    'telefono': '+39 338 469 3769',
+    'telefono': '+39 349 063 0846',
     'hosting': 'il fornitore del servizio di hosting del sito',
 }
 
@@ -46,9 +46,6 @@ def page(slug, title, description, h1, body):
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="site.webmanifest">
   <script>document.documentElement.className = document.documentElement.className.replace('no-js', 'js');</script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="script.js" defer></script>
 </head>
@@ -174,7 +171,7 @@ PRIVACY = f'''
         <li>{T['hosting']}, che ospita il sito (responsabile del trattamento);</li>
         <li>WhatsApp Ireland Ltd. (gruppo Meta), se scegli di contattarci tramite WhatsApp;</li>
         <li>il fornitore del servizio di posta elettronica del Titolare;</li>
-        <li>Google Ireland Ltd., per la mappa (solo con consenso) e per i caratteri tipografici Google Fonts;</li>
+        <li>Google Ireland Ltd., per la mappa nella sezione Contatti (solo con consenso);</li>
         <li>Cloudflare, Inc., che distribuisce tramite cdnjs la libreria grafica usata dall'animazione del sito;</li>
         <li>consulenti fiscali e legali, corrieri e autorità, quando necessario per legge o per eseguire il contratto.</li>
       </ul>
@@ -260,13 +257,6 @@ COOKIE = f'''
               (ad es. NID) secondo la sua <a href="https://policies.google.com/technologies/cookies?hl=it" target="_blank" rel="noopener">cookie policy</a></td>
               <td>Stabilita da Google</td>
               <td><strong>Sì</strong> — la mappa si carica solo dopo il consenso</td>
-            </tr>
-            <tr>
-              <td><strong>Google Fonts</strong><br>fonts.googleapis.com</td>
-              <td>Servizio tecnico, nessun cookie</td>
-              <td>Fornisce i caratteri tipografici: il browser trasmette a Google l'indirizzo IP per scaricarli</td>
-              <td>—</td>
-              <td>Non necessario</td>
             </tr>
             <tr>
               <td><strong>cdnjs</strong><br>Cloudflare</td>
