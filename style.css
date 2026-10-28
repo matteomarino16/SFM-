@@ -838,6 +838,19 @@ p + p { margin-top: var(--space-md); }
 /* ==========================================================================
    09. CHI SIAMO
    ========================================================================== */
+
+/* Puntini luminosi di sfondo */
+.about { overflow: hidden; isolation: isolate; }
+.section-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.about > .container { position: relative; z-index: 1; }
+
 .about__grid {
   display: grid;
   gap: var(--space-xl);

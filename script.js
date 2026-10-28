@@ -1329,6 +1329,106 @@
 
 
   /* ========================================================================
+     08b. PUNTINI LUMINOSI NELLE SEZIONI (canvas 2D)
+     Stesso effetto delle particelle dell'hero, senza Three.js: puntini
+     sfumati che salgono lentamente oscillando. Animati solo quando la sezione
+     è visibile; fermi con "riduci movimento".
+     ======================================================================== */
+  function initSectionParticles() {
+    $$('canvas.section-particles').forEach((canvas) => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const small = window.matchMedia('(max-width: 767px)').matches;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+
+      // Puntino pre-disegnato (stesso gradiente delle particelle dell'hero)
+      const sprite = document.createElement('canvas');
+      sprite.width = sprite.height = 64;
+      const sctx = sprite.getContext('2d');
+      const g = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.25, 'rgba(255,255,255,.9)');
+      g.addColorStop(0.55, 'rgba(255,255,255,.3)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      sctx.fillStyle = g;
+      sctx.fillRect(0, 0, 64, 64);
+
+      let w = 0;
+      let h = 0;
+      let dots = [];
+      const make = (randomY) => ({
+        x: Math.random() * w,
+        y: randomY ? Math.random() * h : h + 10,
+        size: (small ? 5 : 6) + Math.random() * (small ? 7 : 9),   // diametro in px
+        speed: 6 + Math.random() * 22,                             // px al secondo verso l'alto
+        drift: 4 + Math.random() * 10,                             // ampiezza dell'oscillazione
+        phase: Math.random() * Math.PI * 2,
+        alpha: 0.35 + Math.random() * 0.6
+      });
+
+      const resize = () => {
+        const r = canvas.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        w = r.width;
+        h = r.height;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const count = Math.min(small ? 45 : 110, Math.round((w * h) / (small ? 9000 : 11000)));
+        dots = Array.from({ length: count }, () => make(true));
+        draw(0);
+      };
+
+      let t = 0;
+      const draw = (dt) => {
+        t += dt;
+        ctx.clearRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'lighter';
+        dots.forEach((d) => {
+          d.y -= d.speed * dt;
+          if (d.y < -20) Object.assign(d, make(false));
+          const x = d.x + Math.sin(t * 0.5 + d.phase) * d.drift;
+          ctx.globalAlpha = d.alpha;
+          ctx.drawImage(sprite, x - d.size / 2, d.y - d.size / 2, d.size, d.size);
+        });
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      };
+
+      let rafId = null;
+      let last = 0;
+      const loop = (now) => {
+        rafId = requestAnimationFrame(loop);
+        const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+        last = now;
+        draw(dt);
+      };
+      const start = () => {
+        if (rafId || prefersReducedMotion() || document.hidden) return;
+        last = 0;
+        rafId = requestAnimationFrame(loop);
+      };
+      const stop = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      };
+
+      let visible = false;
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(([entry]) => {
+          visible = entry.isIntersecting;
+          visible ? start() : stop();
+        }, { rootMargin: '100px 0px' }).observe(canvas);
+      }
+      document.addEventListener('visibilitychange', () => (document.hidden ? stop() : visible && start()));
+      if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas);
+      else window.addEventListener('resize', resize);
+      resize();
+    });
+  }
+
+
+  /* ========================================================================
      09. HERO 3D (THREE.JS)
      Bottiglia di Vasia (Tenute De Giglio) ricostruita in 3D: vetro scuro
      (LatheGeometry), capsula, etichette fronte/retro reali come texture,
@@ -2116,6 +2216,7 @@
     initReviews();
     initStatement();
     initAboutPhoto();
+    initSectionParticles();
     initReveal();
     initForm();
     initCursor();
