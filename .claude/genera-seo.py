@@ -288,6 +288,7 @@ def build_graph(prodotti, eventi, lang='it'):
             'name': f"{e['titolo']} – {luogo_nome}",
             'description': loc(e, 'descrizione'),
             'startDate': f"{e['data']}T{e.get('ora', '19:00')}:00+02:00",
+            **({'endDate': f"{e['data']}T{e['oraFine']}:00+02:00"} if e.get('oraFine') else {}),
             'eventStatus': 'https://schema.org/EventScheduled',
             'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
             'location': {

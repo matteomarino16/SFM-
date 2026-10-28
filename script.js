@@ -319,7 +319,7 @@
   /**
    * Eventi (locandine). Prima i prossimi eventi (con "Prenota"), poi quelli
    * conclusi in archivio, dal più recente.
-   * data: 'AAAA-MM-GG' · ora: facoltativa
+   * data: 'AAAA-MM-GG' · ora / oraFine: facoltative (es. '19:00' e '23:00')
    * locandine: una o più immagini in assets/eventi/ (formato verticale);
    *   con più locandine, nell'ingrandimento si sfogliano.
    * prenotazione: facoltativo, numero per prenotare il tavolo (altrimenti
@@ -333,15 +333,6 @@
       luogo: 'Lo Sbagliato · Via Gandini 24, Ferrara',
       descrizione: 'Mostra d\'arte contemporanea e degustazione guidata, con le violiniste Cristina Direnzo e Sara Suci.',
       descrizioneEn: 'Contemporary art exhibition and guided tasting, with violinists Cristina Direnzo and Sara Suci.',
-      locandine: ['assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato.jpg']
-    },
-    {
-      titolo: 'L\'ora del calice',
-      data: '2026-10-09',
-      ora: '19:00',
-      luogo: 'Lo Sbagliato · Via Gandini 24, Ferrara',
-      descrizione: 'Mostra d\'arte contemporanea, degustazione guidata e musica live.',
-      descrizioneEn: 'Contemporary art exhibition, guided tasting and live music.',
       locandine: ['assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato-b.jpg'],
       prenotazione: '+393339532029'
     },
@@ -353,6 +344,16 @@
       descrizione: 'Degustazione guidata con musica jazz country e un menu di sfiziosità e cucina tipica.',
       descrizioneEn: 'Guided tasting with jazz-country music and a menu of local specialities and nibbles.',
       locandine: ['assets/eventi/2026-09-11-ora-del-calice-la-bode.jpg']
+    },
+    {
+      titolo: 'Calici d\'autore',
+      data: '2026-07-11',
+      ora: '19:00',
+      oraFine: '23:00',
+      luogo: 'L\'Angolo del Caffè · Via Ludwig Van Beethoven 19a, Ferrara',
+      descrizione: 'Mostra d\'arte contemporanea e degustazione guidata, accompagnata da intrattenimento musicale jazz country.',
+      descrizioneEn: 'Contemporary art exhibition and guided tasting, accompanied by live jazz-country music.',
+      locandine: ['assets/eventi/2026-07-11-calici-dautore-angolo-del-caffe.jpg']
     }
   ];
 
@@ -982,7 +983,8 @@
 
     track.innerHTML = list.map((e, i) => {
       const concluso = e.date < today;
-      const quando = `${fmtLong.format(e.date)}${e.ora ? `, ${L.at} ${e.ora}` : ''}`;
+      const orario = e.ora ? (e.oraFine ? `${LANG === 'en' ? '' : L.at + ' '}${e.ora}–${e.oraFine}` : `${L.at} ${e.ora}`) : '';
+      const quando = `${fmtLong.format(e.date)}${orario ? `, ${orario}` : ''}`;
       const msg = tr(L.eventMsg, { t: field(e, 'titolo'), q: quando });
       const prenota = e.prenotazione
         ? `<a class="event__cta link" href="tel:${escapeHTML(e.prenotazione)}">${L.eventBookPhone}</a>`
