@@ -1329,102 +1329,131 @@
 
 
   /* ========================================================================
-     08b. PUNTINI LUMINOSI NELLE SEZIONI (canvas 2D)
+     08b. PUNTINI LUMINOSI SU TUTTO IL SITO (canvas 2D fisso)
      Stesso effetto delle particelle dell'hero, senza Three.js: puntini
-     sfumati che salgono lentamente oscillando. Animati solo quando la sezione
-     è visibile; fermi con "riduci movimento".
+     sfumati che salgono lentamente oscillando e seguono leggermente lo
+     scroll (parallasse). Nascosti mentre è visibile l'hero, che ha già i suoi;
+     fermi con "riduci movimento".
      ======================================================================== */
-  function initSectionParticles() {
-    $$('canvas.section-particles').forEach((canvas) => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const small = window.matchMedia('(max-width: 767px)').matches;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  function initSiteParticles() {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'site-particles';
+    canvas.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      // Puntino pre-disegnato (stesso gradiente delle particelle dell'hero)
-      const sprite = document.createElement('canvas');
-      sprite.width = sprite.height = 64;
-      const sctx = sprite.getContext('2d');
-      const g = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-      g.addColorStop(0, 'rgba(255,255,255,1)');
-      g.addColorStop(0.25, 'rgba(255,255,255,.9)');
-      g.addColorStop(0.55, 'rgba(255,255,255,.3)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      sctx.fillStyle = g;
-      sctx.fillRect(0, 0, 64, 64);
+    const small = window.matchMedia('(max-width: 767px)').matches;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const PARALLAX = 0.35; // quanto i puntini seguono lo scroll (0 = fermi, 1 = come la pagina)
 
-      let w = 0;
-      let h = 0;
-      let dots = [];
-      const make = (randomY) => ({
-        x: Math.random() * w,
-        y: randomY ? Math.random() * h : h + 10,
-        size: (small ? 5 : 6) + Math.random() * (small ? 7 : 9),   // diametro in px
-        speed: 6 + Math.random() * 22,                             // px al secondo verso l'alto
-        drift: 4 + Math.random() * 10,                             // ampiezza dell'oscillazione
-        phase: Math.random() * Math.PI * 2,
-        alpha: 0.35 + Math.random() * 0.6
-      });
+    // Puntino pre-disegnato (stesso gradiente delle particelle dell'hero)
+    const sprite = document.createElement('canvas');
+    sprite.width = sprite.height = 64;
+    const sctx = sprite.getContext('2d');
+    const g = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.25, 'rgba(255,255,255,.9)');
+    g.addColorStop(0.55, 'rgba(255,255,255,.3)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    sctx.fillStyle = g;
+    sctx.fillRect(0, 0, 64, 64);
 
-      const resize = () => {
-        const r = canvas.getBoundingClientRect();
-        if (!r.width || !r.height) return;
-        w = r.width;
-        h = r.height;
-        canvas.width = Math.round(w * dpr);
-        canvas.height = Math.round(h * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const count = Math.min(small ? 45 : 110, Math.round((w * h) / (small ? 9000 : 11000)));
-        dots = Array.from({ length: count }, () => make(true));
-        draw(0);
-      };
-
-      let t = 0;
-      const draw = (dt) => {
-        t += dt;
-        ctx.clearRect(0, 0, w, h);
-        ctx.globalCompositeOperation = 'lighter';
-        dots.forEach((d) => {
-          d.y -= d.speed * dt;
-          if (d.y < -20) Object.assign(d, make(false));
-          const x = d.x + Math.sin(t * 0.5 + d.phase) * d.drift;
-          ctx.globalAlpha = d.alpha;
-          ctx.drawImage(sprite, x - d.size / 2, d.y - d.size / 2, d.size, d.size);
-        });
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-      };
-
-      let rafId = null;
-      let last = 0;
-      const loop = (now) => {
-        rafId = requestAnimationFrame(loop);
-        const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
-        last = now;
-        draw(dt);
-      };
-      const start = () => {
-        if (rafId || prefersReducedMotion() || document.hidden) return;
-        last = 0;
-        rafId = requestAnimationFrame(loop);
-      };
-      const stop = () => {
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = null;
-      };
-
-      let visible = false;
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(([entry]) => {
-          visible = entry.isIntersecting;
-          visible ? start() : stop();
-        }, { rootMargin: '100px 0px' }).observe(canvas);
-      }
-      document.addEventListener('visibilitychange', () => (document.hidden ? stop() : visible && start()));
-      if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas);
-      else window.addEventListener('resize', resize);
-      resize();
+    let w = 0;
+    let h = 0;
+    let dots = [];
+    const make = (anywhere) => ({
+      x: Math.random() * w,
+      y: anywhere ? Math.random() * h : h + 10,
+      size: (small ? 5 : 6) + Math.random() * (small ? 7 : 9),   // diametro in px
+      speed: 6 + Math.random() * 22,                             // px al secondo verso l'alto
+      drift: 4 + Math.random() * 10,                             // ampiezza dell'oscillazione
+      phase: Math.random() * Math.PI * 2,
+      alpha: 0.3 + Math.random() * 0.55
     });
+
+    let t = 0;
+    let lastScroll = window.scrollY;
+    const draw = (dt) => {
+      t += dt;
+      // parallasse: lo scroll sposta i puntini come se fossero nella pagina
+      const sy = window.scrollY;
+      const dy = (sy - lastScroll) * PARALLAX;
+      lastScroll = sy;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const d of dots) {
+        d.y -= d.speed * dt + dy;
+        if (d.y < -20) { Object.assign(d, make(false)); }
+        else if (d.y > h + 20) { Object.assign(d, make(false)); d.y = -10; }
+        const x = d.x + Math.sin(t * 0.5 + d.phase) * d.drift;
+        ctx.globalAlpha = d.alpha;
+        ctx.drawImage(sprite, x - d.size / 2, d.y - d.size / 2, d.size, d.size);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    };
+
+    let lastW = 0;
+    const resize = () => {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (w !== lastW) {          // nuova distribuzione solo se cambia la larghezza
+        lastW = w;
+        const count = Math.min(small ? 40 : 90, Math.round((w * h) / (small ? 7000 : 13000)));
+        dots = Array.from({ length: count }, () => make(true));
+      }
+      draw(0);
+    };
+
+    let rafId = null;
+    let last = 0;
+    let hidden = false;
+    const loop = (now) => {
+      rafId = requestAnimationFrame(loop);
+      const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+      last = now;
+      draw(dt);
+    };
+    const start = () => {
+      if (rafId || hidden || document.hidden || prefersReducedMotion()) return;
+      last = 0;
+      lastScroll = window.scrollY;
+      rafId = requestAnimationFrame(loop);
+    };
+    const stop = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+    };
+
+    // Nascosti (e fermi) mentre l'hero occupa lo schermo: compaiono quando la
+    // fine dell'hero sale sopra il 35% dello schermo (misure in cache).
+    const hero = $('#hero');
+    let heroBottom = 0;
+    const measureHero = () => {
+      heroBottom = hero ? hero.getBoundingClientRect().bottom + window.scrollY : 0;
+    };
+    const checkHero = () => {
+      const isHidden = !!hero && heroBottom - window.scrollY > window.innerHeight * 0.35;
+      if (isHidden === hidden) return;
+      hidden = isHidden;
+      canvas.classList.toggle('is-hidden', hidden);
+      hidden ? stop() : start();
+    };
+    hidden = null;
+    window.addEventListener('scroll', () => {
+      checkHero();
+      if (prefersReducedMotion() && !hidden) draw(0);
+    }, { passive: true });
+    document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+    window.addEventListener('resize', () => { resize(); measureHero(); checkHero(); });
+    window.addEventListener('load', () => { measureHero(); checkHero(); }, { once: true });
+    resize();
+    measureHero();
+    checkHero();
   }
 
 
@@ -1615,16 +1644,19 @@
   const HERO_SIDE_QUERY = '(min-width: 560px) and (min-aspect-ratio: 1/1)';
 
   function initHero3D() {
+    // Ritorna true se la scena 3D è attiva; false → si usa la versione 2D dei puntini
     const section = $('#hero');          // sezione alta (scroll)
-    if (!section) return;                // pagine senza hero (es. pagine legali)
-    const hero = $('.hero', section);    // contenitore fisso con il canvas
-    const canvas = $('#hero-canvas');
-    if (!section || !hero || !canvas) return;
-
-    if (typeof window.THREE === 'undefined') {
+    if (!section) return false;          // pagine senza hero (es. pagine legali)
+    const hero = $('.hero', section);    // contenitore fisso dei testi dell'hero
+    const canvas = $('#hero-canvas');    // canvas fisso dietro a tutta la pagina
+    if (!hero || !canvas) return false;
+    const fallback = () => {
       hero.classList.add('no-webgl');
-      return;
-    }
+      canvas.hidden = true;
+      return false;
+    };
+
+    if (typeof window.THREE === 'undefined') return fallback();
     const THREE = window.THREE;
 
     // --- Profilo prestazioni -------------------------------------------------
@@ -1643,8 +1675,7 @@
     try {
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
     } catch (err) {
-      hero.classList.add('no-webgl');
-      return;
+      return fallback();
     }
     renderer.setClearColor(0x000000, 1);
     renderer.outputEncoding = THREE.sRGBEncoding;
@@ -1971,8 +2002,8 @@
     let lastW = 0;
     let lastH = 0;
     const resize = (force) => {
-      const w = hero.clientWidth;
-      const h = hero.clientHeight;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
       // Su telefono la barra degli indirizzi genera continui "resize" senza che
       // l'hero (alto 100svh) cambi davvero: in quel caso non si ricalcola nulla.
       if (force !== true && w === lastW && h === lastH) return;
@@ -2033,6 +2064,8 @@
         [0.5, front], [0.62, front], [0.7, back], [0.82, back],
         [0.96, pour], [1, pour]
       ];
+      worldPerPx = (2 * halfH(cameraBase.z)) / h;
+      measureHeroEnd();
       camera.updateProjectionMatrix();
       if (!running) renderFrame(0);
     };
@@ -2057,8 +2090,14 @@
     const clock = new THREE.Clock();
     let running = false;
     let rafId = null;
-    let heroVisible = true;
     let elapsed = 0;
+    // Fine dell'hero nella pagina (in px): misurata nel resize e al caricamento
+    let heroEndDoc = Infinity;
+    function measureHeroEnd() {
+      heroEndDoc = section.getBoundingClientRect().bottom + window.scrollY;
+    }
+    let lastScrollY = window.scrollY;
+    let worldPerPx = 0.01;   // unità 3D per pixel di schermo (aggiornato nel resize)
 
     function renderFrame(dt) {
       elapsed += dt;
@@ -2079,25 +2118,35 @@
       // oscillazione "a riposo" solo mentre la bottiglia è nella posa d'apertura
       const idle = smoothstep(0.24, 0.3, q) * (1 - smoothstep(0.42, 0.5, q));
 
-      bottle.position.set(p.x, p.y + Math.sin(t * 0.6) * 0.08, 0);
+      // Quando l'hero finisce, i suoi contenuti scorrono via verso l'alto: la
+      // bottiglia (sulla scena fissa) li segue di pari passo e poi si nasconde.
+      const exitPx = Math.max(0, lastH - (heroEndDoc - window.scrollY));
+      const exitY = exitPx * worldPerPx;
+      bottle.visible = shadow.visible = exitPx < lastH * 1.2;
+      bottle.position.set(p.x, p.y + Math.sin(t * 0.6) * 0.08 + exitY, 0);
       bottle.scale.setScalar(p.s);
       bottle.rotation.y = p.rotY + Math.sin(t * 0.4) * 0.6 * idle + smooth.x * 0.3;
       bottle.rotation.x = p.rotX + smooth.y * 0.08;
       bottle.rotation.z = p.rotZ + Math.sin(t * 0.5) * 0.02;
 
       // Riflesso a terra: segue la bottiglia e sparisce quando si inclina
-      shadow.position.set(p.x, p.y - 3.25 * p.s, 0);
+      shadow.position.set(p.x, p.y - 3.25 * p.s + exitY, 0);
       shadow.scale.setScalar(p.s);
       shadow.material.opacity = 0.5 * smoothstep(0.22, 0.3, q) * (1 - smoothstep(0.84, 0.95, q));
 
-      // Particelle: salgono lentamente con lieve oscillazione
-      if (dt > 0) {
+      // Particelle: salgono lentamente con lieve oscillazione e seguono un po'
+      // lo scroll della pagina (parallasse), così accompagnano tutto il sito
+      const sy = window.scrollY;
+      const scrollShift = (sy - lastScrollY) * worldPerPx * 0.35;
+      lastScrollY = sy;
+      if (dt > 0 || scrollShift) {
         const pos = particleGeo.attributes.position.array;
         for (let i = 0; i < PARTICLES; i++) {
           const iy = i * 3 + 1;
-          pos[iy] += speeds[i] * dt;
+          pos[iy] += speeds[i] * dt + scrollShift;
           pos[i * 3] += Math.sin(t * 0.4 + phases[i]) * 0.0025;
-          if (pos[iy] > AREA.y) pos[iy] = -AREA.y;
+          if (pos[iy] > AREA.y) pos[iy] -= 2 * AREA.y;
+          else if (pos[iy] < -AREA.y) pos[iy] += 2 * AREA.y;
         }
         particleGeo.attributes.position.needsUpdate = true;
       }
@@ -2140,7 +2189,7 @@
     }
 
     function start() {
-      if (running || prefersReducedMotion() || !heroVisible || document.hidden) return;
+      if (running || prefersReducedMotion() || document.hidden) return;
       running = true;
       lastStamp = 0;
       clock.getDelta(); // azzera il delta accumulato durante la pausa
@@ -2153,13 +2202,10 @@
       rafId = null;
     }
 
-    // Ferma il loop quando l'hero non è visibile o la scheda è in background
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver(([entry]) => {
-        heroVisible = entry.isIntersecting;
-        heroVisible ? start() : stop();
-      }).observe(section);
-    }
+    // La scena resta attiva su tutta la pagina (i puntini sono lo sfondo del
+    // sito): fuori dall'hero si nasconde solo la bottiglia, così si disegnano
+    // soltanto i puntini, che costano pochissimo. Pausa con la scheda in background.
+    window.addEventListener('load', measureHeroEnd, { once: true });
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
 
     // Preferenza di movimento ridotto: un solo frame statico
@@ -2182,8 +2228,8 @@
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       stop();
-      hero.classList.add('no-webgl');
-    });
+      fallback();
+      });
 
     // Fase iniziale dell'oscillazione: etichetta leggermente di tre quarti
     elapsed = -0.9;
@@ -2194,6 +2240,7 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resize(true));
     renderFrame(0);
     start();
+    return true;
   }
 
 
@@ -2216,12 +2263,13 @@
     initReviews();
     initStatement();
     initAboutPhoto();
-    initSectionParticles();
     initReveal();
     initForm();
     initCursor();
     initHeroScroll();
-    initHero3D();
+    // Puntini: la scena 3D fa da sfondo a tutto il sito; dove non c'è
+    // (pagine legali, dispositivi senza WebGL) si usa la versione 2D.
+    if (!initHero3D()) initSiteParticles();
   }
 
   if (document.readyState === 'loading') {

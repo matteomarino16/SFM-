@@ -37,7 +37,7 @@
   --c-gold: #c9a467;   /* oro del logo: usato con parsimonia (stelle, dettagli) */
 
   --bg: var(--c-black);
-  --bg-alt: var(--c-ink);
+  --bg-alt: var(--c-black);   /* sfondo unico: nero pieno in tutto il sito */
   --text: var(--c-white);
   --text-soft: var(--c-300);
   --text-muted: var(--c-500);
@@ -513,7 +513,7 @@ p + p { margin-top: var(--space-md); }
   gap: var(--space-lg);
   padding: var(--header-h) var(--gutter) var(--space-lg);
   overflow: hidden;
-  background: var(--c-black);
+  background: transparent;   /* sotto c'è la scena 3D fissa (#hero-canvas) */
 }
 
 .hero-scroll.is-scrolly {
@@ -535,12 +535,21 @@ p + p { margin-top: var(--space-md); }
     radial-gradient(ellipse at 50% 38%, #1c1c1c 0%, #070707 45%, #000 75%);
 }
 
+/* Scena 3D (bottiglia + puntini): fissa dietro a tutta la pagina. La bottiglia
+   compare solo nell'hero, i puntini restano su tutto il sito.
+   100vh (non 100svh): su telefono l'altezza non cambia con la barra degli indirizzi. */
 .hero__canvas {
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  pointer-events: none;
 }
+/* contenuti sopra la scena */
+main,
+.site-footer { position: relative; z-index: 1; }
 
 /* Velo per garantire la leggibilità dei testi sopra il 3D */
 .hero__veil {
@@ -803,7 +812,7 @@ p + p { margin-top: var(--space-md); }
   border-top: 1px solid var(--line-soft);
 }
 
-.section:nth-of-type(even) { background: var(--bg-alt); }
+.section { background: transparent; }  /* il nero è quello del body: sotto c'è lo sfondo animato */
 
 .section-head { margin-bottom: var(--space-xl); }
 .section-head .section-title { margin-bottom: 0; }
@@ -838,19 +847,6 @@ p + p { margin-top: var(--space-md); }
 /* ==========================================================================
    09. CHI SIAMO
    ========================================================================== */
-
-/* Puntini luminosi di sfondo */
-.about { overflow: hidden; isolation: isolate; }
-.section-particles {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.about > .container { position: relative; z-index: 1; }
-
 .about__grid {
   display: grid;
   gap: var(--space-xl);
@@ -1717,10 +1713,10 @@ p + p { margin-top: var(--space-md); }
   align-items: center;
   gap: .9rem;
   padding: .9rem 1rem;
-  background: var(--bg-alt);
+  background: var(--c-black);
   transition: background-color .35s var(--ease);
 }
-.contact__item:hover { background: #121212; }
+.contact__item:hover { background: #080808; }
 
 .contact__icon {
   flex-shrink: 0;
@@ -1776,7 +1772,7 @@ p + p { margin-top: var(--space-md); }
 .request__card {
   display: grid;
   border: 1px solid var(--line);
-  background: linear-gradient(160deg, #0f0f0f 0%, #050505 100%);
+  background: var(--c-black);
 }
 
 .request__aside {
@@ -1827,7 +1823,34 @@ p + p { margin-top: var(--space-md); }
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
-.request__direct .link { color: var(--c-white); justify-self: start; }
+.request__direct { gap: .65rem; }
+.request__direct-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .75rem;
+  justify-self: start;
+  color: var(--c-white);
+}
+.request__direct-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--c-gold);
+  transition: background-color .35s var(--ease), color .35s var(--ease), border-color .35s var(--ease);
+}
+.request__direct-icon svg { width: 16px; height: 16px; }
+.request__direct-link:hover .request__direct-icon,
+.request__direct-link:focus-visible .request__direct-icon {
+  background: var(--c-white);
+  border-color: var(--c-white);
+  color: var(--c-black);
+}
+.request__direct-link:hover .link,
+.request__direct-link:focus-visible .link { background-size: 100% 1px; background-position: 0 100%; }
 
 .form {
   padding: clamp(1.5rem, 1rem + 2vw, 2.5rem);
@@ -2102,7 +2125,7 @@ textarea.field__input:not(:placeholder-shown) + .field__label,
 .site-footer {
   padding-block: var(--space-md) calc(var(--space-md) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line-soft);
-  background: var(--c-black);
+  background: transparent;
   font-size: .78rem;
   color: var(--text-muted);
 }
@@ -2141,6 +2164,23 @@ textarea.field__input:not(:placeholder-shown) + .field__label,
   }
 }
 
+
+/* --- Puntini luminosi su tutto il sito ------------------------------------
+   Un unico canvas fisso grande quanto lo schermo, sopra gli sfondi e sotto
+   header, pulsanti flottanti e banner. "screen" lo fonde con lo sfondo:
+   sul nero i puntini brillano, su bianco e immagini quasi spariscono. */
+.site-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 1;
+  transition: opacity .8s var(--ease);
+}
+.site-particles.is-hidden { opacity: 0; }
 
 /* ==========================================================================
    16. WHATSAPP FLOTTANTE
@@ -2294,7 +2334,7 @@ textarea.field__input:not(:placeholder-shown) + .field__label,
   max-height: calc(100svh - 2rem);
   overflow-y: auto;
   padding: 1.5rem 1.4rem 1.3rem;
-  background: #0b0b0b;
+  background: var(--c-black);
   border: 1px solid var(--line);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .7);
   opacity: 0;

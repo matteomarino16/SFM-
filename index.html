@@ -840,6 +840,9 @@
 <body>
   <a class="skip-link" href="#contenuto">Vai al contenuto</a>
 
+  <!-- Scena 3D di sfondo (bottiglia nell'hero, puntini su tutto il sito) -->
+  <canvas class="hero__canvas" id="hero-canvas" aria-hidden="true"></canvas>
+
   <!-- Cursore personalizzato (solo dispositivi con mouse) -->
   <div class="cursor" aria-hidden="true"></div>
 
@@ -886,7 +889,6 @@
          mentre lo scroll guida l'animazione 3D e i capitoli di testo. -->
     <section class="hero-scroll" id="hero" aria-label="Introduzione">
       <div class="hero">
-        <canvas class="hero__canvas" id="hero-canvas" aria-hidden="true"></canvas>
         <div class="hero__veil" aria-hidden="true"></div>
 
         <!-- 1. Apertura: logo grande. Scorrendo il monogramma "vola" nell'header -->
@@ -941,14 +943,12 @@
          2. CHI SIAMO
          ======================================================================== -->
     <section class="section about" id="chi-siamo" aria-labelledby="about-title">
-      <!-- Puntini luminosi di sfondo (stesso effetto dell'hero, canvas 2D leggero) -->
-      <canvas class="section-particles" aria-hidden="true"></canvas>
       <div class="container">
         <div class="about__grid">
           <div class="about__text">
             <p class="eyebrow reveal">— Chi siamo</p>
             <h2 class="section-title reveal" id="about-title">Selezione, etica,<br><em>territorio.</em></h2>
-            <p class="lead reveal">S.F.M. Distribuzione seleziona vini e bevande d'eccellenza esclusivamente per il settore HORECA. La nostra etica commerciale è semplice e trasparente: proponiamo solo cantine artigianali e referenze assenti dalla grande distribuzione, per garantire ai ristoratori prodotti unici e margini tutelati.</p>
+            <p class="lead reveal">S.F.M. Distribuzione è pura ricerca sul campo. Costruiamo il nostro catalogo per essere il punto di riferimento unico per i professionisti dell'Ho.Re.Ca. che cercano l'eccellenza a 360 gradi. Copriamo ogni sfumatura dell'esperienza di degustazione, dal calice di benvenuto fino all'ultimo sorso del fine pasto: portiamo nel vostro locale la vera artigianalità per ogni momento del servizio. Essere nostri partner significa avere la garanzia di distinguersi in ogni dettaglio della propria offerta.</p>
           </div>
 
           <!-- Elemento grafico: calice disegnato a linea -->
@@ -1341,8 +1341,14 @@
 
             <div class="request__direct">
               <span>Preferisci parlarne subito?</span>
-              <a class="link" href="https://wa.me/393384693769" data-wa data-wa-text="Buongiorno, vorrei ricevere il listino HORECA." target="_blank" rel="noopener">Scrivici su WhatsApp</a>
-              <a class="link" href="tel:+393490630846">+39 349 063 0846</a>
+              <a class="request__direct-link" href="https://wa.me/393384693769" data-wa data-wa-text="Buongiorno, vorrei ricevere il listino HORECA." target="_blank" rel="noopener">
+                <span class="request__direct-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-whatsapp"/></svg></span>
+                <span class="link">Scrivici su WhatsApp</span>
+              </a>
+              <a class="request__direct-link" href="tel:+393490630846">
+                <span class="request__direct-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></span>
+                <span class="link">+39 349 063 0846</span>
+              </a>
             </div>
           </aside>
 
