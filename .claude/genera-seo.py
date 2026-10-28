@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """
 Genera la <head> SEO di index.html (meta, Open Graph, geo, dati strutturati
-JSON-LD) leggendo prodotti ed eventi da script.js.
+JSON-LD) leggendo prodotti ed eventi da script.js, e la versione inglese
+en/index.html (testi tradotti da traduzioni_en.py, percorsi corretti, SEO in inglese).
 
 Uso (dalla cartella del sito):  python3 .claude/genera-seo.py
-Va rilanciato quando cambiano prodotti, eventi o i dati aziendali qui sotto.
+Va rilanciato quando cambiano prodotti, eventi, testi della pagina o i dati aziendali.
+⚠ Modificare sempre index.html (italiano): en/index.html viene rigenerata da qui.
 """
+import html as htmllib
 import json
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import traduzioni_en as T_EN  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE = 'https://www.sfmdistribuzioni.com'
-TODAY = '2026-10-25'
+TODAY = '2026-10-28'
 
 # ---------------------------------------------------------------------------
 # DATI AZIENDALI — l'unico segnaposto rimasto è la P.IVA
@@ -38,8 +45,71 @@ AZIENDA = {
 }
 
 CATEGORIE = {
-    'rossi': 'Vino rosso', 'bianchi': 'Vino bianco', 'bollicine': 'Spumante',
-    'rosati': 'Vino rosato', 'distillati': 'Amaro / distillato', 'bevande': 'Bevanda',
+    'it': {'rossi': 'Vino rosso', 'bianchi': 'Vino bianco', 'bollicine': 'Spumante',
+           'rosati': 'Vino rosato', 'distillati': 'Amaro / distillato', 'bevande': 'Bevanda'},
+    'en': {'rossi': 'Red wine', 'bianchi': 'White wine', 'bollicine': 'Sparkling wine',
+           'rosati': 'Rosé wine', 'distillati': 'Amaro / spirit', 'bevande': 'Soft drink'},
+}
+
+# Testi per lingua (meta, dati strutturati)
+TXT = {
+    'it': {
+        'url': f'{SITE}/', 'lang': 'it-IT', 'og_locale': 'it_IT', 'og_alt_locale': 'en_GB',
+        'title': 'Distributore vini HORECA | S.F.M. Distribuzione – Vini d\'eccellenza',
+        'desc': ('Distributore di vini d\'eccellenza solo per HORECA: cantine artigianali assenti dalla GDO, '
+                 'zero minimi d\'ordine, consegne in 48/72h e consulenza carta vini.'),
+        'og_title': 'S.F.M. Distribuzione – Vini e bevande d\'eccellenza per l\'HORECA',
+        'og_desc': ('Cantine artigianali assenti dalla grande distribuzione, nessun minimo d\'ordine, consegne in 48/72 ore '
+                    'e degustazioni guidate per ristoranti, bar, enoteche e hotel.'),
+        'tw_title': 'S.F.M. Distribuzione – Vini d\'eccellenza per l\'HORECA',
+        'img_alt': 'S.F.M. Vini d\'eccellenza – Un viaggio nel mondo del vino',
+        'keywords': ('distributore vini HORECA, distribuzione vini ristoranti, fornitore vini bar, vini per enoteche, '
+                     'vini artigianali, vini calabresi IGP, consulenza carta dei vini, degustazioni guidate, '
+                     'nessun minimo d\'ordine, Ferrara'),
+        'org_desc': ('Distributore di vini e bevande d\'eccellenza esclusivamente per il settore HORECA: '
+                     'cantine artigianali assenti dalla grande distribuzione, nessun minimo d\'ordine, '
+                     'consegne in 48/72 ore, consulenza sulla carta dei vini e degustazioni guidate.'),
+        'slogan': 'Un viaggio nel mondo del vino',
+        'catalog': 'Catalogo vini e bevande HORECA', 'zona': 'Zona di produzione', 'italia': 'Italia',
+        'area': ['Ferrara', 'Provincia di Ferrara', 'Emilia-Romagna', 'Italia'],
+        'knows': ['Distribuzione vini HORECA', 'Vini artigianali', 'Vini calabresi IGP',
+                  'Carta dei vini per ristoranti', 'Formazione personale di sala',
+                  'Degustazioni guidate', 'Amari artigianali'],
+        'servizi': [
+            ('Consegne rapide senza minimi d\'ordine', 'Consegne frazionate in 48/72 ore, senza minimi d\'ordine, per locali HORECA.'),
+            ('Catalogo esclusivo HORECA', 'Etichette artigianali e micro-produzioni assenti dalla grande distribuzione.'),
+            ('Consulenza carta dei vini', 'Costruzione della carta dei vini e formazione del personale di sala.'),
+            ('Format Degustazione Guidata', 'Serate di degustazione chiavi in mano nel locale del cliente.'),
+        ],
+    },
+    'en': {
+        'url': f'{SITE}/en/', 'lang': 'en-GB', 'og_locale': 'en_GB', 'og_alt_locale': 'it_IT',
+        'title': 'Italian Fine Wine Distributor for HoReCa | S.F.M. Distribuzione',
+        'desc': ('Fine Italian wines for HoReCa: artisanal wineries absent from mass retail, no minimum order, '
+                 '48/72h delivery and wine list consulting. Ferrara, Italy.'),
+        'og_title': 'S.F.M. Distribuzione – Fine Italian wines for the HoReCa trade',
+        'og_desc': ('Artisanal wineries absent from mass retail, no minimum order, 48/72-hour delivery and guided '
+                    'tastings for restaurants, bars, wine bars and hotels.'),
+        'tw_title': 'S.F.M. Distribuzione – Fine Italian wines for HoReCa',
+        'img_alt': 'S.F.M. Fine wines – A journey into the world of wine',
+        'keywords': ('Italian wine distributor, HoReCa wine supplier, wine wholesaler Italy, wines for restaurants, '
+                     'artisanal Italian wines, Calabrian IGP wines, wine list consulting, guided wine tastings, '
+                     'no minimum order, Ferrara, Emilia-Romagna'),
+        'org_desc': ('Distributor of fine wines and beverages exclusively for the HoReCa trade: artisanal wineries '
+                     'absent from mass retail, no minimum order, 48/72-hour delivery, wine list consulting and guided tastings.'),
+        'slogan': 'A journey into the world of wine',
+        'catalog': 'HoReCa wine and beverage catalogue', 'zona': 'Production area', 'italia': 'Italy',
+        'area': ['Ferrara', 'Province of Ferrara', 'Emilia-Romagna', 'Italy'],
+        'knows': ['HoReCa wine distribution', 'Artisanal wines', 'Calabrian IGP wines',
+                  'Restaurant wine lists', 'Front-of-house staff training',
+                  'Guided wine tastings', 'Artisanal amari'],
+        'servizi': [
+            ('Fast delivery, no minimum order', 'Split deliveries within 48/72 hours with no minimum order for HoReCa venues.'),
+            ('Exclusive HoReCa catalogue', 'Artisanal labels and small productions absent from mass retail.'),
+            ('Wine list consulting', 'Wine list design and front-of-house staff training.'),
+            ('Guided Tasting Format', 'Turnkey tasting evenings at the client\'s venue.'),
+        ],
+    },
 }
 
 FAQ = [
@@ -86,10 +156,14 @@ def absolute(path):
     return f'{SITE}/{path}'
 
 
-def build_graph(prodotti, eventi):
+def build_graph(prodotti, eventi, lang='it'):
     org_id = f'{SITE}/#azienda'
     a = AZIENDA
     ind = a['indirizzo']
+    t = TXT[lang]
+    cats = CATEGORIE[lang]
+    en = lang == 'en'
+    loc = lambda obj, key: (obj.get(key + 'En') if en else None) or obj.get(key, '')
 
     # Catalogo raggruppato per categoria
     gruppi = {}
@@ -97,36 +171,31 @@ def build_graph(prodotti, eventi):
         gruppi.setdefault(p['categoria'], []).append(p)
     catalogo = {
         '@type': 'OfferCatalog',
-        'name': 'Catalogo vini e bevande HORECA',
+        'name': t['catalog'],
         'itemListElement': [{
             '@type': 'OfferCatalog',
-            'name': CATEGORIE.get(cat, cat).capitalize(),
+            'name': cats.get(cat, cat).capitalize(),
             'itemListElement': [{
                 '@type': 'Offer',
                 'eligibleCustomerType': 'http://purl.org/goodrelations/v1#Business',
                 'businessFunction': 'http://purl.org/goodrelations/v1#Sell',
                 'itemOffered': {
                     '@type': 'Product',
-                    'name': f"{p['nome']} – {p['cantina']}",
-                    'brand': {'@type': 'Brand', 'name': p['cantina']},
-                    'category': CATEGORIE.get(cat, cat),
-                    'description': p.get('descrizione', ''),
+                    'name': f"{p['nome']} – {loc(p, 'cantina')}",
+                    'brand': {'@type': 'Brand', 'name': loc(p, 'cantina')},
+                    'category': cats.get(cat, cat),
+                    'description': loc(p, 'descrizione'),
                     'image': [absolute(i) for i in p.get('immagini', [])],
-                    'countryOfOrigin': {'@type': 'Country', 'name': 'Italia'},
+                    'countryOfOrigin': {'@type': 'Country', 'name': t['italia']},
                     'additionalProperty': [{
-                        '@type': 'PropertyValue', 'name': 'Zona di produzione', 'value': p.get('regione', ''),
+                        '@type': 'PropertyValue', 'name': t['zona'], 'value': p.get('regione', ''),
                     }],
                 },
             } for p in lista],
         } for cat, lista in gruppi.items()],
     }
 
-    servizi = [
-        ('Consegne rapide senza minimi d\'ordine', 'Consegne frazionate in 48/72 ore, senza minimi d\'ordine, per locali HORECA.'),
-        ('Catalogo esclusivo HORECA', 'Etichette artigianali e micro-produzioni assenti dalla grande distribuzione.'),
-        ('Consulenza carta dei vini', 'Costruzione della carta dei vini e formazione del personale di sala.'),
-        ('Format Degustazione Guidata', 'Serate di degustazione chiavi in mano nel locale del cliente.'),
-    ]
+    servizi = t['servizi']
 
     graph = [
         {
@@ -134,10 +203,8 @@ def build_graph(prodotti, eventi):
             '@id': org_id,
             'name': a['nome'],
             'alternateName': a['alias'],
-            'slogan': a['slogan'],
-            'description': 'Distributore di vini e bevande d\'eccellenza esclusivamente per il settore HORECA: '
-                           'cantine artigianali assenti dalla grande distribuzione, nessun minimo d\'ordine, '
-                           'consegne in 48/72 ore, consulenza sulla carta dei vini e degustazioni guidate.',
+            'slogan': t['slogan'],
+            'description': t['org_desc'],
             'url': f'{SITE}/',
             'logo': {'@type': 'ImageObject', '@id': f'{SITE}/#logo', 'url': absolute('assets/logo-sfm.png'),
                      'width': 404, 'height': 480, 'caption': a['nome']},
@@ -152,14 +219,12 @@ def build_graph(prodotti, eventi):
             'geo': {'@type': 'GeoCoordinates', 'latitude': a['lat'], 'longitude': a['lng']},
             'hasMap': f"https://www.google.com/maps/search/?api=1&query={a['lat']},{a['lng']}",
             'areaServed': [
-                {'@type': 'City', 'name': 'Ferrara'},
-                {'@type': 'AdministrativeArea', 'name': 'Provincia di Ferrara'},
-                {'@type': 'AdministrativeArea', 'name': 'Emilia-Romagna'},
-                {'@type': 'Country', 'name': 'Italia'},
+                {'@type': 'City', 'name': t['area'][0]},
+                {'@type': 'AdministrativeArea', 'name': t['area'][1]},
+                {'@type': 'AdministrativeArea', 'name': t['area'][2]},
+                {'@type': 'Country', 'name': t['area'][3]},
             ],
-            'knowsAbout': ['Distribuzione vini HORECA', 'Vini artigianali', 'Vini calabresi IGP',
-                           'Carta dei vini per ristoranti', 'Formazione personale di sala',
-                           'Degustazioni guidate', 'Amari artigianali'],
+            'knowsAbout': t['knows'],
             'openingHoursSpecification': [{
                 '@type': 'OpeningHoursSpecification',
                 'dayOfWeek': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -167,7 +232,7 @@ def build_graph(prodotti, eventi):
             }],
             'contactPoint': [{
                 '@type': 'ContactPoint', 'contactType': 'sales', 'telephone': a['telefono'], 'email': a['email'],
-                'areaServed': 'IT', 'availableLanguage': ['Italian'],
+                'areaServed': 'IT', 'availableLanguage': ['Italian', 'English'],
             }],
             'makesOffer': [{
                 '@type': 'Offer',
@@ -183,29 +248,30 @@ def build_graph(prodotti, eventi):
             'url': f'{SITE}/',
             'name': a['nome'],
             'alternateName': a['alias'],
-            'inLanguage': 'it-IT',
+            'inLanguage': ['it-IT', 'en-GB'],
             'publisher': {'@id': org_id},
         },
         {
             '@type': 'WebPage',
-            '@id': f'{SITE}/#pagina',
-            'url': f'{SITE}/',
-            'name': 'Distributore vini HORECA | S.F.M. Distribuzione – Vini d\'eccellenza',
+            '@id': f"{t['url']}#pagina",
+            'url': t['url'],
+            'name': t['title'],
             'isPartOf': {'@id': f'{SITE}/#sito'},
             'about': {'@id': org_id},
             'primaryImageOfPage': {'@type': 'ImageObject', 'url': absolute('assets/og-image.jpg'), 'width': 1200, 'height': 630},
-            'inLanguage': 'it-IT',
+            'inLanguage': t['lang'],
             'datePublished': TODAY,
             'dateModified': TODAY,
         },
         {
             '@type': 'FAQPage',
-            '@id': f'{SITE}/#faq',
-            'isPartOf': {'@id': f'{SITE}/#pagina'},
+            '@id': f"{t['url']}#faq",
+            'isPartOf': {'@id': f"{t['url']}#pagina"},
+            'inLanguage': t['lang'],
             'mainEntity': [{
                 '@type': 'Question', 'name': q,
                 'acceptedAnswer': {'@type': 'Answer', 'text': r},
-            } for q, r in FAQ],
+            } for q, r in (faq_en() if en else FAQ)],
         },
     ]
 
@@ -220,7 +286,7 @@ def build_graph(prodotti, eventi):
         node = {
             '@type': 'Event',
             'name': f"{e['titolo']} – {luogo_nome}",
-            'description': e.get('descrizione', ''),
+            'description': loc(e, 'descrizione'),
             'startDate': f"{e['data']}T{e.get('ora', '19:00')}:00+02:00",
             'eventStatus': 'https://schema.org/EventScheduled',
             'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
@@ -238,30 +304,31 @@ def build_graph(prodotti, eventi):
     return {'@context': 'https://schema.org', '@graph': graph}
 
 
-def build_head(graph):
+def faq_en():
+    return [(q, f'{lead} {r}'.strip()) for q, lead, r in T_EN.FAQ_EN]
+
+
+def build_head(graph, lang='it'):
     a = AZIENDA
-    title = 'Distributore vini HORECA | S.F.M. Distribuzione – Vini d\'eccellenza'
-    desc = ('Distributore di vini d\'eccellenza solo per HORECA: cantine artigianali assenti dalla GDO, '
-            'zero minimi d\'ordine, consegne in 48/72h e consulenza carta vini.')
-    og_desc = ('Cantine artigianali assenti dalla grande distribuzione, nessun minimo d\'ordine, consegne in 48/72 ore '
-               'e degustazioni guidate per ristoranti, bar, enoteche e hotel.')
+    t = TXT[lang]
     jsonld = json.dumps(graph, ensure_ascii=False, indent=2)
     jsonld = '\n'.join('  ' + line for line in jsonld.split('\n'))
-    return f'''  <!-- ==========================================================================
+    return f"""  <!-- ==========================================================================
        META / SEO  (generata da .claude/genera-seo.py — modificare lì e rilanciare)
        ========================================================================== -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{title}</title>
-  <meta name="description" content="{desc}">
+  <title>{t['title']}</title>
+  <meta name="description" content="{t['desc']}">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="{a['nome']}">
-  <meta name="keywords" content="distributore vini HORECA, distribuzione vini ristoranti, fornitore vini bar, vini per enoteche, vini artigianali, vini calabresi IGP, consulenza carta dei vini, degustazioni guidate, nessun minimo d'ordine, Ferrara">
+  <meta name="keywords" content="{t['keywords']}">
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=yes">
-  <link rel="canonical" href="{SITE}/">
+  <link rel="canonical" href="{t['url']}">
   <link rel="alternate" hreflang="it" href="{SITE}/">
+  <link rel="alternate" hreflang="en" href="{SITE}/en/">
   <link rel="alternate" hreflang="x-default" href="{SITE}/">
 
   <!-- Geo (SEO locale): Ferrara -->
@@ -272,22 +339,23 @@ def build_head(graph):
 
   <!-- Open Graph / social -->
   <meta property="og:type" content="website">
-  <meta property="og:locale" content="it_IT">
+  <meta property="og:locale" content="{t['og_locale']}">
+  <meta property="og:locale:alternate" content="{t['og_alt_locale']}">
   <meta property="og:site_name" content="{a['nome']}">
-  <meta property="og:title" content="{a['nome']} – Vini e bevande d'eccellenza per l'HORECA">
-  <meta property="og:description" content="{og_desc}">
-  <meta property="og:url" content="{SITE}/">
+  <meta property="og:title" content="{t['og_title']}">
+  <meta property="og:description" content="{t['og_desc']}">
+  <meta property="og:url" content="{t['url']}">
   <meta property="og:image" content="{SITE}/assets/og-image.jpg">
   <meta property="og:image:secure_url" content="{SITE}/assets/og-image.jpg">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="S.F.M. Vini d'eccellenza – Un viaggio nel mondo del vino">
+  <meta property="og:image:alt" content="{t['img_alt']}">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{a['nome']} – Vini d'eccellenza per l'HORECA">
-  <meta name="twitter:description" content="{og_desc}">
+  <meta name="twitter:title" content="{t['tw_title']}">
+  <meta name="twitter:description" content="{t['og_desc']}">
   <meta name="twitter:image" content="{SITE}/assets/og-image.jpg">
-  <meta name="twitter:image:alt" content="S.F.M. Vini d'eccellenza – Un viaggio nel mondo del vino">
+  <meta name="twitter:image:alt" content="{t['img_alt']}">
 
   <!-- Icone e manifest -->
   <link rel="icon" href="favicon.ico" sizes="48x48">
@@ -318,22 +386,113 @@ def build_head(graph):
   <script type="application/ld+json">
 {jsonld}
   </script>
-'''
+"""
+
+
+# ---------------------------------------------------------------------------
+# Versione inglese: traduzione del corpo della pagina e correzione dei percorsi
+# ---------------------------------------------------------------------------
+def _forms(text):
+    """Le possibili forme di un testo nel sorgente HTML (con e senza entità)."""
+    esc = htmllib.escape(text, quote=False)
+    return [text] if esc == text else [text, esc]
+
+
+def translate_body(body):
+    missing = []
+    # Domande frequenti: blocco rigenerato dalle traduzioni
+    items = ''.join(
+        '          <details class="service faq__item reveal">\n'
+        '            <summary class="service__head faq__q">\n'
+        f'              <span class="service__titles"><span class="service__title">{htmllib.escape(q, quote=False)}</span></span>\n'
+        '              <span class="service__toggle" aria-hidden="true"></span>\n'
+        '            </summary>\n'
+        '            <div class="service__body"><p>'
+        + (f'<strong class="faq__lead">{htmllib.escape(lead, quote=False)}</strong> ' if lead else '')
+        + f'{htmllib.escape(r, quote=False)}</p></div>\n'
+        '          </details>\n'
+        for q, lead, r in T_EN.FAQ_EN)
+    m = re.search(r'(<section class="section faq".*?<div class="services__list">\n)(.*?)(        </div>\n      </div>\n    </section>)', body, re.S)
+    body = body[:m.start(2)] + items + body[m.end(2):]
+
+    # Testi visibili: si sostituisce solo il contenuto intero di un nodo di testo
+    for it, en in sorted(T_EN.TESTI, key=lambda x: -len(x[0])):
+        done = False
+        for form in _forms(it):
+            pat = re.compile(r'(>\s*)' + re.escape(form).replace(r'\ ', r'\s+') + r'(\s*<)')
+            body, n = pat.subn(lambda mm: mm.group(1) + htmllib.escape(en, quote=False) + mm.group(2), body)
+            done = done or n > 0
+        if not done:
+            missing.append(it)
+    # Attributi
+    for it, en in T_EN.ATTRIBUTI:
+        done = False
+        for form in {it, htmllib.escape(it, quote=True)}:
+            for attr in ('alt', 'aria-label', 'title', 'data-wa-text'):
+                old = f'{attr}="{form}"'
+                if old in body:
+                    body = body.replace(old, f'{attr}="{htmllib.escape(en, quote=True)}"')
+                    done = True
+        if not done:
+            missing.append('[attr] ' + it)
+    # Valori del form
+    for it, en in T_EN.VALORI:
+        body = body.replace(f'value="{it}"', f'value="{en}"')
+    if missing:
+        print('⚠ Testi non trovati (aggiornare traduzioni_en.py):')
+        for x in missing:
+            print('   -', x)
+    return body
+
+
+def fix_paths(html):
+    """Da /en/ i percorsi relativi salgono di un livello (../)."""
+    def repl(m):
+        attr, val = m.group(1), m.group(2)
+        if re.match(r'^(https?:|mailto:|tel:|data:|#|/|\.\./)', val) or val == '':
+            return m.group(0)
+        return f'{attr}="../{val}"'
+    return re.sub(r'\b(href|src)="([^"]*)"', repl, html)
+
+
+def build_en(html_it, graph_en):
+    head_start = html_it.index('  <!-- ==========================================================================\n       META / SEO')
+    head_end = html_it.index('</head>')
+    body = translate_body(html_it[head_end:])
+    html = html_it[:head_start] + build_head(graph_en, 'en') + body
+    html = html.replace('<html lang="it" class="no-js">', '<html lang="en" class="no-js">', 1)
+    html = fix_paths(html)
+    # Selettore di lingua: IT torna alla radice, EN è la pagina corrente
+    html = re.sub(
+        r'<nav class="lang-switch".*?</nav>',
+        '<nav class="lang-switch" aria-label="Language / Lingua">\n'
+        '        <a class="lang-switch__link" href="../" hreflang="it" lang="it" data-lang-link>IT</a>\n'
+        '        <span class="lang-switch__sep" aria-hidden="true">/</span>\n'
+        '        <a class="lang-switch__link is-current" href="./" hreflang="en" lang="en" aria-current="page" data-lang-link>EN</a>\n'
+        '      </nav>', html, count=1, flags=re.S)
+    html = html.replace('<!-- Pagina generata', '<!-- Pagina generata', 1)
+    banner = ('<!-- ⚠ FILE GENERATO da .claude/genera-seo.py partendo da index.html:\n'
+              '     non modificarlo a mano (le modifiche andrebbero perse). -->\n')
+    return html.replace('<body>', '<body>\n  ' + banner, 1)
 
 
 def main():
     js = (ROOT / 'script.js').read_text(encoding='utf-8')
     prodotti = parse_array(js, 'PRODOTTI')
     eventi = parse_array(js, 'EVENTI')
-    graph = build_graph(prodotti, eventi)
 
+    # Italiano
     html_path = ROOT / 'index.html'
     html = html_path.read_text(encoding='utf-8')
     start = html.index('  <!-- ==========================================================================\n       META / SEO')
     end = html.index('</head>')
-    html = html[:start] + build_head(graph) + html[end:]
+    html = html[:start] + build_head(build_graph(prodotti, eventi, 'it'), 'it') + html[end:]
     html_path.write_text(html, encoding='utf-8')
-    print(f'OK: {len(prodotti)} prodotti, {len(eventi)} locandine eventi, {len(FAQ)} FAQ')
+
+    # Inglese
+    (ROOT / 'en').mkdir(exist_ok=True)
+    (ROOT / 'en' / 'index.html').write_text(build_en(html, build_graph(prodotti, eventi, 'en')), encoding='utf-8')
+    print(f'OK: index.html + en/index.html · {len(prodotti)} prodotti, {len(eventi)} locandine eventi, {len(FAQ)} FAQ')
 
 
 if __name__ == '__main__':

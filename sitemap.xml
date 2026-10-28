@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.sfmdistribuzioni.com/</loc>
-    <lastmod>2026-10-25</lastmod>
+    <lastmod>2026-10-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="it" href="https://www.sfmdistribuzioni.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.sfmdistribuzioni.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.sfmdistribuzioni.com/"/>
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/og-image.jpg</image:loc></image:image>
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/chi-siamo.jpg</image:loc></image:image>
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/logo-sfm.png</image:loc></image:image>
@@ -24,5 +28,13 @@
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato.jpg</image:loc></image:image>
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato-b.jpg</image:loc></image:image>
     <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/eventi/2026-09-11-ora-del-calice-la-bode.jpg</image:loc></image:image>
+  </url>
+  <url>
+    <loc>https://www.sfmdistribuzioni.com/en/</loc>
+    <lastmod>2026-10-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="it" href="https://www.sfmdistribuzioni.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.sfmdistribuzioni.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.sfmdistribuzioni.com/"/>
+    <image:image><image:loc>https://www.sfmdistribuzioni.com/assets/og-image.jpg</image:loc></image:image>
   </url>
 </urlset>

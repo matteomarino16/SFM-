@@ -29,6 +29,85 @@
    */
   const FORM_ENDPOINT = '';
 
+  /* ------------------------------------------------------------------------
+     LINGUA: la pagina italiana ha <html lang="it">, quella inglese (/en/)
+     <html lang="en">. I testi generati da JavaScript arrivano da I18N.
+     ------------------------------------------------------------------------ */
+  const LANG = (document.documentElement.lang || 'it').toLowerCase().startsWith('en') ? 'en' : 'it';
+  const LOCALE = LANG === 'en' ? 'en-GB' : 'it-IT';
+  const I18N = {
+    it: {
+      cat: { rossi: 'Vino Rosso', bianchi: 'Vino Bianco', bollicine: 'Bollicine', rosati: 'Rosato', distillati: 'Amaro / Distillato', bevande: 'Bevanda' },
+      menuOpen: 'Apri il menu', menuClose: 'Chiudi il menu',
+      productMsg: 'Buongiorno, vorrei informazioni sul prodotto: {p}',
+      productInfo: 'Richiedi info', productInfoAria: 'Richiedi informazioni: {p}',
+      productZoom: 'Ingrandisci la foto {i} di {n}: {p}', photo: 'foto', of: 'di',
+      prevPhoto: 'Foto precedente', nextPhoto: 'Foto successiva',
+      noProducts: 'Nessun prodotto in questa categoria al momento. Contattaci per conoscere le novità.',
+      eventKicker: 'Serata evento', eventPast: 'Concluso', at: 'ore',
+      eventBookPhone: 'Prenota il tavolo', eventBookWa: 'Prenota su WhatsApp',
+      eventMsg: 'Buongiorno, vorrei prenotare per l\'evento "{t}" di {q}.',
+      poster: 'Locandina', posterZoom: 'Ingrandisci la locandina: {t}, {q}',
+      reviewsCount: '{n} recensioni su Google', reviewsNone: 'Le opinioni dei ristoratori che lavorano con noi, su Google.', stars: '{n} stelle su 5',
+      err: {
+        nome: 'Inserisci il tuo nome e cognome.', nomeShort: 'Il nome sembra troppo corto.',
+        locale: 'Inserisci il nome del tuo locale.', citta: 'Indica la città in cui si trova il locale.',
+        tipologia: 'Scegli la tipologia del tuo locale.', email: 'Inserisci il tuo indirizzo email.',
+        emailBad: 'Indirizzo email non valido (es. nome@dominio.it).', tel: 'Inserisci un numero di telefono.',
+        telBad: 'Numero di telefono non valido (solo cifre, spazi e +).',
+        msgLong: 'Il messaggio può contenere al massimo 1000 caratteri.',
+        privacy: 'Per inviare la richiesta è necessario accettare l\'informativa privacy.'
+      },
+      mail: { title: 'Richiesta listino HORECA — S.F.M. Distribuzione', subject: 'Richiesta listino HORECA — {l}', nome: 'Nome', locale: 'Locale', citta: 'Città', email: 'Email', tel: 'Telefono', interessi: 'Interessi', msg: 'Messaggio:' },
+      cookie: {
+        title: 'Rispettiamo la tua privacy',
+        text: 'Usiamo solo cookie tecnici e, con il tuo consenso, contenuti di terze parti come la mappa di Google. Nessun cookie di profilazione o pubblicità. Puoi cambiare idea in qualsiasi momento da «Preferenze cookie» in fondo alla pagina. Dettagli nella <a class="link" href="{href}">Cookie Policy</a>.',
+        reject: 'Rifiuta', accept: 'Accetta', custom: 'Personalizza', save: 'Salva le scelte', close: 'Chiudi e rifiuta i cookie facoltativi',
+        necName: 'Tecnici e necessari', necText: 'Salvano le tue preferenze sui cookie. Sempre attivi: senza questi il sito non può ricordare la tua scelta.',
+        mapName: 'Contenuti di terze parti (Google Maps)', mapText: 'Mostrano la mappa interattiva di Google nella sezione Contatti. Google può impostare cookie propri.'
+      }
+    },
+    en: {
+      cat: { rossi: 'Red wine', bianchi: 'White wine', bollicine: 'Sparkling', rosati: 'Rosé', distillati: 'Amaro / Spirit', bevande: 'Soft drink' },
+      menuOpen: 'Open menu', menuClose: 'Close menu',
+      productMsg: 'Hello, I would like information about: {p}',
+      productInfo: 'Ask for info', productInfoAria: 'Ask for information: {p}',
+      productZoom: 'Enlarge photo {i} of {n}: {p}', photo: 'photo', of: 'of',
+      prevPhoto: 'Previous photo', nextPhoto: 'Next photo',
+      noProducts: 'No products in this category at the moment. Contact us to hear about new arrivals.',
+      eventKicker: 'Event night', eventPast: 'Past event', at: 'at',
+      eventBookPhone: 'Book a table', eventBookWa: 'Book on WhatsApp',
+      eventMsg: 'Hello, I would like to book for the event "{t}" on {q}.',
+      poster: 'Poster', posterZoom: 'Enlarge the poster: {t}, {q}',
+      reviewsCount: '{n} reviews on Google', reviewsNone: 'What the restaurateurs who work with us say, on Google.', stars: '{n} out of 5 stars',
+      err: {
+        nome: 'Please enter your full name.', nomeShort: 'The name looks too short.',
+        locale: 'Please enter the name of your venue.', citta: 'Please enter the city where your venue is.',
+        tipologia: 'Please choose your type of venue.', email: 'Please enter your email address.',
+        emailBad: 'Invalid email address (e.g. name@domain.com).', tel: 'Please enter a phone number.',
+        telBad: 'Invalid phone number (digits, spaces and + only).',
+        msgLong: 'The message can be up to 1000 characters long.',
+        privacy: 'You need to accept the privacy policy to send the request.'
+      },
+      mail: { title: 'HoReCa price list request — S.F.M. Distribuzione', subject: 'HoReCa price list request — {l}', nome: 'Name', locale: 'Venue', citta: 'City', email: 'Email', tel: 'Phone', interessi: 'Interests', msg: 'Message:' },
+      cookie: {
+        title: 'We respect your privacy',
+        text: 'We only use technical cookies and, with your consent, third-party content such as the Google map. No profiling or advertising cookies. You can change your mind at any time from “Cookie preferences” at the bottom of the page. Details in the <a class="link" href="{href}">Cookie Policy</a> (in Italian).',
+        reject: 'Reject', accept: 'Accept', custom: 'Customise', save: 'Save choices', close: 'Close and reject optional cookies',
+        necName: 'Technical and necessary', necText: 'They store your cookie preferences. Always on: without them the site cannot remember your choice.',
+        mapName: 'Third-party content (Google Maps)', mapText: 'They display the interactive Google map in the Contact section. Google may set its own cookies.'
+      }
+    }
+  };
+  const L = I18N[LANG];
+  /** Testo tradotto con segnaposto {chiave}. */
+  const tr = (str, vars = {}) => str.replace(/\{(\w+)\}/g, (_, k) => (k in vars ? vars[k] : ''));
+  /** Campo di un prodotto/evento nella lingua corrente (es. descrizioneEn). */
+  const field = (obj, key) => (LANG === 'en' && obj[key + 'En']) || obj[key];
+  /** Percorso relativo alla radice del sito (la pagina inglese sta in /en/). */
+  const ROOT_PATH = LANG === 'en' ? '../' : '';
+  const asset = (path) => (/^(https?:|data:|\/)/.test(path) ? path : ROOT_PATH + path);
+
   /** Email per l'invio alternativo del form (mailto). */
   const CONTACT_EMAIL = 'info@sfmdistribuzioni.com';
 
@@ -49,14 +128,7 @@
   };
 
   /** Etichette leggibili delle categorie (la chiave corrisponde a data-filter nell'HTML). */
-  const CATEGORIE = {
-    rossi: 'Vino Rosso',
-    bianchi: 'Vino Bianco',
-    bollicine: 'Bollicine',
-    rosati: 'Rosato',
-    distillati: 'Amaro / Distillato',
-    bevande: 'Bevanda'
-  };
+  const CATEGORIE = L.cat;
 
   /**
    * Catalogo prodotti.
@@ -74,6 +146,7 @@
       categoria: 'rossi',
       regione: 'Calabria IGP',
       descrizione: 'Calabrese e Sangiovese. Rosso intenso con riflessi violacei, frutti rossi e finale persistente: ideale con carni e formaggi stagionati.',
+      descrizioneEn: 'Calabrese and Sangiovese. Deep red with violet hues, red fruit and a long finish: ideal with meat dishes and aged cheeses.',
       immagini: [
         'assets/prodotti/web/vasia-rosso.jpg',
         'assets/prodotti/web/vasia-rosso-retro.jpg'
@@ -85,6 +158,7 @@
       categoria: 'rossi',
       regione: 'Calabria',
       descrizione: 'Rosso calabrese dal carattere deciso, pensato per accompagnare la cucina di terra e i piatti più strutturati.',
+      descrizioneEn: 'A Calabrian red with strong character, made to pair with hearty, land-based cuisine.',
       immagini: ['assets/prodotti/web/kalanero.jpg']
     },
     {
@@ -93,6 +167,7 @@
       categoria: 'rossi',
       regione: 'Calabria IGP',
       descrizione: 'Dalla linea dedicata al fiore simbolo della primavera: profumi intensi e delicati, gusto vivace e sorprendente.',
+      descrizioneEn: 'From the line dedicated to the flower of spring: intense yet delicate aromas, a lively and surprising palate.',
       immagini: [
         'assets/prodotti/web/primula-rosso.jpg',
         'assets/prodotti/web/primula-rosso-retro.jpg'
@@ -104,6 +179,7 @@
       categoria: 'rossi',
       regione: 'Calabria',
       descrizione: 'Rosso dall\'etichetta d\'autore, morbido e conviviale: un compagno versatile per tutta la tavola.',
+      descrizioneEn: 'A red with an artist\'s label, soft and convivial: a versatile companion for the whole table.',
       immagini: [
         'assets/prodotti/web/dalia-rosso.jpg',
         'assets/prodotti/web/dalia-rosso-retro.jpg'
@@ -115,6 +191,7 @@
       categoria: 'rossi',
       regione: 'Calabria',
       descrizione: '"Si canusci du culuri, d\'a scumma e du sapuri." Rosso schietto e territoriale, da tutti i giorni.',
+      descrizioneEn: '"You know it by its colour, its froth and its taste." An honest, territorial everyday red.',
       immagini: [
         'assets/prodotti/web/calasulu-rosso.jpg',
         'assets/prodotti/web/calasulu-rosso-retro.jpg'
@@ -128,6 +205,7 @@
       categoria: 'bianchi',
       regione: 'Calabria IGP',
       descrizione: 'Insolia. Giallo paglierino, note agrumate, finale fresco e persistente. Perfetto con pesce e cucina mediterranea.',
+      descrizioneEn: 'Insolia. Straw yellow, citrus notes, a fresh and persistent finish. Perfect with fish and Mediterranean cuisine.',
       immagini: [
         'assets/prodotti/web/mareme-bianco.jpg',
         'assets/prodotti/web/mareme-bianco-retro.jpg'
@@ -139,6 +217,7 @@
       categoria: 'bianchi',
       regione: 'Calabria IGP',
       descrizione: 'Bianco giovane e luminoso: profumi intensi e delicati, sorso vivace. Ottimo con antipasti e crudi.',
+      descrizioneEn: 'A young, luminous white: intense yet delicate aromas, a lively sip. Excellent with starters and raw fish.',
       immagini: [
         'assets/prodotti/web/primula-bianco.jpg',
         'assets/prodotti/web/primula-bianco-retro.jpg'
@@ -150,6 +229,7 @@
       categoria: 'bianchi',
       regione: 'Calabria',
       descrizione: 'Bianco fresco e beverino, ideale per aperitivi e piatti di mare.',
+      descrizioneEn: 'A fresh, easy-drinking white, ideal for aperitifs and seafood dishes.',
       immagini: [
         'assets/prodotti/web/dalia-bianco.jpg',
         'assets/prodotti/web/dalia-bianco-retro.jpg'
@@ -161,6 +241,7 @@
       categoria: 'bianchi',
       regione: 'Calabria',
       descrizione: 'Bianco calabrese semplice e sincero, da servire fresco con la cucina quotidiana.',
+      descrizioneEn: 'A simple, sincere Calabrian white, to be served chilled with everyday cooking.',
       immagini: [
         'assets/prodotti/web/calasulu-bianco.jpg',
         'assets/prodotti/web/calasulu-bianco-retro.jpg'
@@ -174,6 +255,7 @@
       categoria: 'rosati',
       regione: 'Calabria IGP',
       descrizione: 'Calabrese e Sangiovese. Rosa cerasuolo, naso fruttato, finale fresco e persistente. Da servire a 10–12 °C.',
+      descrizioneEn: 'Calabrese and Sangiovese. Cherry-pink, fruity nose, fresh and persistent finish. Serve at 10–12 °C.',
       immagini: [
         'assets/prodotti/web/murmuro-rosato.jpg',
         'assets/prodotti/web/murmuro-rosato-retro.jpg'
@@ -185,6 +267,7 @@
       categoria: 'rosati',
       regione: 'Calabria IGP',
       descrizione: 'Rosato delicato e floreale, dalla linea Primula: freschezza e piacevolezza per la bella stagione.',
+      descrizioneEn: 'A delicate, floral rosé from the Primula line: freshness and pleasure for the warm season.',
       immagini: [
         'assets/prodotti/web/primula-rosato.jpg',
         'assets/prodotti/web/primula-rosato-retro.jpg'
@@ -196,6 +279,7 @@
       categoria: 'rosati',
       regione: 'Calabria',
       descrizione: 'Rosato brillante e fragrante, perfetto per aperitivi, pizza e cucina estiva.',
+      descrizioneEn: 'A bright, fragrant rosé, perfect for aperitifs, pizza and summer dishes.',
       immagini: [
         'assets/prodotti/web/dalia-rosato.jpg',
         'assets/prodotti/web/dalia-rosato-retro.jpg'
@@ -207,6 +291,7 @@
       categoria: 'rosati',
       regione: 'Calabria',
       descrizione: 'Rosato fresco e immediato, dal colore vivace: un jolly per la carta al calice.',
+      descrizioneEn: 'A fresh, approachable rosé with a vivid colour: a wildcard for your by-the-glass list.',
       immagini: [
         'assets/prodotti/web/calasulu-rosato.jpg',
         'assets/prodotti/web/calasulu-rosato-retro.jpg'
@@ -217,9 +302,11 @@
     {
       nome: 'Amaro Korva',
       cantina: 'Produzione artigianale',
+      cantinaEn: 'Artisanal production',
       categoria: 'distillati',
       regione: 'Calabria · 30% vol.',
       descrizione: 'Amaro artigianale ottenuto dall\'infusione di erbe aromatiche e agrumi. Il fine pasto che mancava in carta.',
+      descrizioneEn: 'Artisanal amaro made from an infusion of aromatic herbs and citrus. The after-dinner digestif your list was missing.',
       immagini: [
         'assets/prodotti/web/amaro-korva.jpg',
         'assets/prodotti/web/amaro-korva-retro-1.jpg',
@@ -245,6 +332,7 @@
       ora: '19:00',
       luogo: 'Lo Sbagliato · Via Gandini 24, Ferrara',
       descrizione: 'Mostra d\'arte contemporanea e degustazione guidata, con le violiniste Cristina Direnzo e Sara Suci.',
+      descrizioneEn: 'Contemporary art exhibition and guided tasting, with violinists Cristina Direnzo and Sara Suci.',
       locandine: ['assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato.jpg']
     },
     {
@@ -253,6 +341,7 @@
       ora: '19:00',
       luogo: 'Lo Sbagliato · Via Gandini 24, Ferrara',
       descrizione: 'Mostra d\'arte contemporanea, degustazione guidata e musica live.',
+      descrizioneEn: 'Contemporary art exhibition, guided tasting and live music.',
       locandine: ['assets/eventi/2026-10-09-ora-del-calice-lo-sbagliato-b.jpg'],
       prenotazione: '+393339532029'
     },
@@ -262,6 +351,7 @@
       ora: '19:00',
       luogo: 'La Bode Ristobar · Via Boccacanale di S. Stefano 36, Ferrara',
       descrizione: 'Degustazione guidata con musica jazz country e un menu di sfiziosità e cucina tipica.',
+      descrizioneEn: 'Guided tasting with jazz-country music and a menu of local specialities and nibbles.',
       locandine: ['assets/eventi/2026-09-11-ora-del-calice-la-bode.jpg']
     }
   ];
@@ -329,7 +419,7 @@
       const n = images.length;
       index = (i + n) % n;
       img.src = images[index];
-      img.alt = n > 1 ? `${title} (${index + 1} di ${n})` : title;
+      img.alt = n > 1 ? `${title} (${index + 1} ${L.of} ${n})` : title;
       [vPrev, vNext, vCount].forEach((el) => { if (el) el.hidden = n < 2; });
       if (vCount) vCount.textContent = `${index + 1} / ${n}`;
     };
@@ -390,14 +480,14 @@
   const CONSENT_CATEGORIES = [
     {
       id: 'necessari',
-      nome: 'Tecnici e necessari',
-      testo: 'Salvano le tue preferenze sui cookie. Sempre attivi: senza questi il sito non può ricordare la tua scelta.',
+      nome: L.cookie.necName,
+      testo: L.cookie.necText,
       fisso: true
     },
     {
       id: 'mappe',
-      nome: 'Contenuti di terze parti (Google Maps)',
-      testo: 'Mostrano la mappa interattiva di Google nella sezione Contatti. Google può impostare cookie propri.'
+      nome: L.cookie.mapName,
+      testo: L.cookie.mapText
     }
   ];
 
@@ -444,15 +534,11 @@
       banner.setAttribute('aria-labelledby', 'cookie-title');
       banner.setAttribute('aria-describedby', 'cookie-desc');
       banner.innerHTML = `
-        <button class="cookie-banner__close" type="button" data-cookie="rifiuta" aria-label="Chiudi e rifiuta i cookie facoltativi">
+        <button class="cookie-banner__close" type="button" data-cookie="rifiuta" aria-label="${L.cookie.close}">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
-        <p class="cookie-banner__title" id="cookie-title">Rispettiamo la tua privacy</p>
-        <p class="cookie-banner__text" id="cookie-desc">
-          Usiamo solo cookie tecnici e, con il tuo consenso, contenuti di terze parti come la mappa di Google.
-          Nessun cookie di profilazione o pubblicità. Puoi cambiare idea in qualsiasi momento da
-          «Preferenze cookie» in fondo alla pagina. Dettagli nella <a class="link" href="cookie-policy.html">Cookie Policy</a>.
-        </p>
+        <p class="cookie-banner__title" id="cookie-title">${L.cookie.title}</p>
+        <p class="cookie-banner__text" id="cookie-desc">${tr(L.cookie.text, { href: ROOT_PATH + 'cookie-policy.html' })}</p>
         <div class="cookie-banner__prefs" hidden>
           ${CONSENT_CATEGORIES.map((c) => `
             <label class="cookie-pref">
@@ -467,10 +553,10 @@
             </label>`).join('')}
         </div>
         <div class="cookie-banner__actions">
-          <button class="btn btn--outline" type="button" data-cookie="rifiuta">Rifiuta</button>
-          <button class="btn btn--solid" type="button" data-cookie="accetta">Accetta</button>
-          <button class="cookie-banner__more link" type="button" data-cookie="personalizza">Personalizza</button>
-          <button class="btn btn--solid" type="button" data-cookie="salva" hidden>Salva le scelte</button>
+          <button class="btn btn--outline" type="button" data-cookie="rifiuta">${L.cookie.reject}</button>
+          <button class="btn btn--solid" type="button" data-cookie="accetta">${L.cookie.accept}</button>
+          <button class="cookie-banner__more link" type="button" data-cookie="personalizza">${L.cookie.custom}</button>
+          <button class="btn btn--solid" type="button" data-cookie="salva" hidden>${L.cookie.save}</button>
         </div>`;
       document.body.appendChild(banner);
 
@@ -591,7 +677,7 @@
 
     const setOpen = (open) => {
       toggle.setAttribute('aria-expanded', String(open));
-      toggle.setAttribute('aria-label', open ? 'Chiudi il menu' : 'Apri il menu');
+      toggle.setAttribute('aria-label', open ? L.menuClose : L.menuOpen);
       nav.classList.toggle('is-open', open);
       header.classList.toggle('is-menu-open', open);
       document.body.classList.toggle('is-locked', open);
@@ -647,6 +733,17 @@
   }
 
 
+  /** Cambio lingua: si resta sulla stessa sezione (gli id sono uguali). */
+  function initLangSwitch() {
+    $$('[data-lang-link]').forEach((a) => {
+      a.addEventListener('click', () => {
+        const hash = window.location.hash;
+        if (hash && !a.getAttribute('href').includes('#')) a.setAttribute('href', a.getAttribute('href') + hash);
+      });
+    });
+  }
+
+
   /* ========================================================================
      04. ANIMAZIONI DI COMPARSA
      ======================================================================== */
@@ -691,7 +788,7 @@
     </svg>`;
 
   function productMessage(p) {
-    return `Buongiorno, vorrei informazioni sul prodotto: ${p.nome} – ${p.cantina}`;
+    return tr(L.productMsg, { p: `${p.nome} – ${field(p, 'cantina')}` });
   }
 
   function showProductPlaceholder(media) {
@@ -710,8 +807,8 @@
     li.style.setProperty('--i', index);
 
     const categoria = CATEGORIE[p.categoria] || '';
-    const nomeCompleto = `${p.nome} – ${p.cantina}`;
-    let images = (p.immagini || (p.immagine ? [p.immagine] : [])).slice();
+    const nomeCompleto = `${p.nome} – ${field(p, 'cantina')}`;
+    let images = (p.immagini || (p.immagine ? [p.immagine] : [])).map(asset);
     const n = images.length;
     const multi = n > 1;
 
@@ -721,15 +818,15 @@
           <span class="product__badge">${escapeHTML(categoria)}</span>
           ${n ? `<div class="product__slides">
             ${images.map((src, i) => `
-              <button class="product__slide" type="button" data-i="${i}" aria-label="Ingrandisci la foto ${i + 1} di ${n}: ${escapeHTML(nomeCompleto)}">
-                <img src="${escapeHTML(src)}" alt="${escapeHTML(nomeCompleto)}${multi ? ` (foto ${i + 1})` : ''}" loading="lazy" decoding="async" width="750" height="1000">
+              <button class="product__slide" type="button" data-i="${i}" aria-label="${escapeHTML(tr(L.productZoom, { i: i + 1, n, p: nomeCompleto }))}">
+                <img src="${escapeHTML(src)}" alt="${escapeHTML(nomeCompleto)}${multi ? ` (${L.photo} ${i + 1})` : ''}" loading="lazy" decoding="async" width="750" height="1000">
               </button>`).join('')}
           </div>` : ''}
           ${multi ? `
-            <button class="product__nav product__nav--prev" type="button" aria-label="Foto precedente" disabled>
+            <button class="product__nav product__nav--prev" type="button" aria-label="${L.prevPhoto}" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 5l-7 7 7 7"/></svg>
             </button>
-            <button class="product__nav product__nav--next" type="button" aria-label="Foto successiva">
+            <button class="product__nav product__nav--next" type="button" aria-label="${L.nextPhoto}">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5l7 7-7 7"/></svg>
             </button>
             <div class="product__dots" aria-hidden="true">${images.map((_, i) => `<span class="product__dot${i === 0 ? ' is-active' : ''}"></span>`).join('')}</div>` : ''}
@@ -737,11 +834,11 @@
         <div class="product__body">
           <span class="product__region">${escapeHTML(p.regione)}</span>
           <h3 class="product__name">${escapeHTML(p.nome)}</h3>
-          <p class="product__winery">${escapeHTML(p.cantina)}</p>
-          <p class="product__desc">${escapeHTML(p.descrizione)}</p>
+          <p class="product__winery">${escapeHTML(field(p, 'cantina'))}</p>
+          <p class="product__desc">${escapeHTML(field(p, 'descrizione'))}</p>
           <a class="product__cta" href="${buildWhatsAppUrl(productMessage(p))}" target="_blank" rel="noopener"
-             aria-label="Richiedi informazioni: ${escapeHTML(nomeCompleto)}">
-            <span>Richiedi info</span>
+             aria-label="${escapeHTML(tr(L.productInfoAria, { p: nomeCompleto }))}">
+            <span>${L.productInfo}</span>
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a>
         </div>
@@ -813,7 +910,7 @@
       if (!list.length) {
         const empty = document.createElement('li');
         empty.className = 'products__empty';
-        empty.textContent = 'Nessun prodotto in questa categoria al momento. Contattaci per conoscere le novità.';
+        empty.textContent = L.noProducts;
         fragment.appendChild(empty);
       } else {
         list.forEach((p, i) => fragment.appendChild(createProductItem(p, i)));
@@ -859,7 +956,7 @@
     const all = EVENTI.map((e) => ({
       ...e,
       date: parseDate(e.data),
-      locandine: e.locandine || (e.locandina ? [e.locandina] : [])
+      locandine: (e.locandine || (e.locandina ? [e.locandina] : [])).map(asset)
     }));
     const upcoming = all.filter((e) => e.date >= today).sort((a, b) => a.date - b.date);
     const past = all.filter((e) => e.date < today).sort((a, b) => b.date - a.date).slice(0, EVENTI_CONCLUSI_MAX);
@@ -872,44 +969,44 @@
       return;
     }
 
-    const fmtDay = new Intl.DateTimeFormat('it-IT', { day: '2-digit' });
-    const fmtMonth = new Intl.DateTimeFormat('it-IT', { month: 'short' });
-    const fmtLong = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const fmtDay = new Intl.DateTimeFormat(LOCALE, { day: '2-digit' });
+    const fmtMonth = new Intl.DateTimeFormat(LOCALE, { month: 'short' });
+    const fmtLong = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const fallbackPoster = (e) => `
       <span class="event__fallback" aria-hidden="true">
-        <span class="event__fallback-kicker">Serata evento</span>
-        <span class="event__fallback-title">${escapeHTML(e.titolo)}</span>
+        <span class="event__fallback-kicker">${L.eventKicker}</span>
+        <span class="event__fallback-title">${escapeHTML(field(e, 'titolo'))}</span>
         <span class="event__fallback-brand">S.F.M. Distribuzione</span>
       </span>`;
 
     track.innerHTML = list.map((e, i) => {
       const concluso = e.date < today;
-      const quando = `${fmtLong.format(e.date)}${e.ora ? `, ore ${e.ora}` : ''}`;
-      const msg = `Buongiorno, vorrei prenotare per l'evento "${e.titolo}" di ${quando}.`;
+      const quando = `${fmtLong.format(e.date)}${e.ora ? `, ${L.at} ${e.ora}` : ''}`;
+      const msg = tr(L.eventMsg, { t: field(e, 'titolo'), q: quando });
       const prenota = e.prenotazione
-        ? `<a class="event__cta link" href="tel:${escapeHTML(e.prenotazione)}">Prenota il tavolo</a>`
+        ? `<a class="event__cta link" href="tel:${escapeHTML(e.prenotazione)}">${L.eventBookPhone}</a>`
         : `<a class="event__cta link" href="${buildWhatsAppUrl(msg)}" target="_blank" rel="noopener">
              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-whatsapp"/></svg>
-             Prenota su WhatsApp
+             ${L.eventBookWa}
            </a>`;
       const piu = e.locandine.length > 1 ? `<span class="event__count" aria-hidden="true">1 / ${e.locandine.length}</span>` : '';
       return `
         <li class="event${concluso ? ' is-past' : ''}">
-          <button class="event__poster" type="button" data-index="${i}" aria-label="Ingrandisci la locandina: ${escapeHTML(e.titolo)}, ${quando}">
+          <button class="event__poster" type="button" data-index="${i}" aria-label="${escapeHTML(tr(L.posterZoom, { t: field(e, 'titolo'), q: quando }))}">
             <span class="event__date" aria-hidden="true">
               <span class="event__day">${fmtDay.format(e.date)}</span>
               <span class="event__month">${fmtMonth.format(e.date).replace('.', '')}</span>
             </span>
-            ${concluso ? '<span class="event__status">Concluso</span>' : ''}
+            ${concluso ? `<span class="event__status">${L.eventPast}</span>` : ''}
             ${piu}
             ${fallbackPoster(e)}
           </button>
           <div class="event__info">
-            <h3 class="event__title">${escapeHTML(e.titolo)}</h3>
+            <h3 class="event__title">${escapeHTML(field(e, 'titolo'))}</h3>
             <p class="event__meta"><time datetime="${e.data}${e.ora ? `T${e.ora}` : ''}">${quando}</time></p>
             ${e.luogo ? `<p class="event__meta">${escapeHTML(e.luogo)}</p>` : ''}
-            ${e.descrizione ? `<p class="event__desc">${escapeHTML(e.descrizione)}</p>` : ''}
+            ${e.descrizione ? `<p class="event__desc">${escapeHTML(field(e, 'descrizione'))}</p>` : ''}
             ${concluso ? '' : prenota}
           </div>
         </li>`;
@@ -926,7 +1023,7 @@
 
       const img = new Image();
       img.className = 'event__img';
-      img.alt = `Locandina: ${e.titolo}`;
+      img.alt = `${L.poster}: ${field(e, 'titolo')}`;
       img.loading = 'lazy';
       img.decoding = 'async';
       img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
@@ -934,7 +1031,7 @@
       img.src = e.locandine[0];
       btn.appendChild(img); // inserita subito: il caricamento "lazy" parte solo nel DOM
 
-      btn.addEventListener('click', () => openViewer(e.locandine, 0, `Locandina: ${e.titolo}`));
+      btn.addEventListener('click', () => openViewer(e.locandine, 0, `${L.poster}: ${field(e, 'titolo')}`));
     });
 
     // --- Frecce della fila: scorrono di una locandina alla volta ---
@@ -978,15 +1075,15 @@
 
     const rating = $('[data-reviews-rating]', section);
     if (rating && voto) {
-      rating.textContent = voto.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      rating.textContent = voto.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       rating.hidden = false;
     }
 
     const count = $('[data-reviews-count]', section);
     if (count) {
       count.textContent = totale
-        ? `${totale} recensioni su Google`
-        : 'Le opinioni dei ristoratori che lavorano con noi, su Google.';
+        ? tr(L.reviewsCount, { n: totale })
+        : L.reviewsNone;
     }
 
     const read = $('[data-reviews-read]', section);
@@ -998,7 +1095,7 @@
     if (list && recensioni.length) {
       list.innerHTML = recensioni.map((r) => `
         <li class="review reveal">
-          <span class="stars" style="--fill:${(r.voto / 5) * 100}%" role="img" aria-label="${r.voto} stelle su 5"></span>
+          <span class="stars" style="--fill:${(r.voto / 5) * 100}%" role="img" aria-label="${tr(L.stars, { n: r.voto })}"></span>
           <p class="review__text">“${escapeHTML(r.testo)}”</p>
           <p class="review__author">${escapeHTML(r.autore)}</p>
         </li>`).join('');
@@ -1044,28 +1141,28 @@
     // Regole di validazione: ritornano il messaggio d'errore oppure ''
     const rules = {
       nome: (v) => {
-        if (!v) return 'Inserisci il tuo nome e cognome.';
-        if (v.length < 3) return 'Il nome sembra troppo corto.';
+        if (!v) return L.err.nome;
+        if (v.length < 3) return L.err.nomeShort;
         return '';
       },
-      locale: (v) => (v ? '' : 'Inserisci il nome del tuo locale.'),
-      citta: (v) => (v ? '' : 'Indica la città in cui si trova il locale.'),
-      tipologia: (v) => (v ? '' : 'Scegli la tipologia del tuo locale.'),
+      locale: (v) => (v ? '' : L.err.locale),
+      citta: (v) => (v ? '' : L.err.citta),
+      tipologia: (v) => (v ? '' : L.err.tipologia),
       email: (v) => {
-        if (!v) return 'Inserisci il tuo indirizzo email.';
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Indirizzo email non valido (es. nome@dominio.it).';
+        if (!v) return L.err.email;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return L.err.emailBad;
         return '';
       },
       telefono: (v) => {
-        if (!v) return 'Inserisci un numero di telefono.';
+        if (!v) return L.err.tel;
         const digits = v.replace(/\D/g, '');
         if (!/^[+\d\s().\-/]+$/.test(v) || digits.length < 6 || digits.length > 15) {
-          return 'Numero di telefono non valido (solo cifre, spazi e +).';
+          return L.err.telBad;
         }
         return '';
       },
-      messaggio: (v) => (v.length > 1000 ? 'Il messaggio può contenere al massimo 1000 caratteri.' : ''),
-      privacy: (v) => (v ? '' : 'Per inviare la richiesta è necessario accettare l\'informativa privacy.')
+      messaggio: (v) => (v.length > 1000 ? L.err.msgLong : ''),
+      privacy: (v) => (v ? '' : L.err.privacy)
     };
 
     const tipologiaGroup = $('.chips-field[role="radiogroup"]', form);
@@ -1109,15 +1206,15 @@
     const composeMessage = (d, bold) => {
       const b = (t) => (bold ? `*${t}*` : t);
       return [
-        b('Richiesta listino HORECA — S.F.M. Distribuzione'),
+        b(L.mail.title),
         '',
-        `Nome: ${d.nome}`,
-        `Locale: ${d.locale} (${d.tipologia})`,
-        `Città: ${d.citta}`,
-        `Email: ${d.email}`,
-        `Telefono: ${d.telefono}`,
-        ...(d.interessi.length ? [`Interessi: ${d.interessi.join(', ')}`] : []),
-        ...(d.messaggio ? ['', 'Messaggio:', d.messaggio] : [])
+        `${L.mail.nome}: ${d.nome}`,
+        `${L.mail.locale}: ${d.locale} (${d.tipologia})`,
+        `${L.mail.citta}: ${d.citta}`,
+        `${L.mail.email}: ${d.email}`,
+        `${L.mail.tel}: ${d.telefono}`,
+        ...(d.interessi.length ? [`${L.mail.interessi}: ${d.interessi.join(', ')}`] : []),
+        ...(d.messaggio ? ['', L.mail.msg, d.messaggio] : [])
       ].join('\n');
     };
 
@@ -1181,7 +1278,7 @@
       // Canale scelto dal pulsante premuto: WhatsApp (principale) o email
       const channel = (e.submitter && e.submitter.dataset.channel) || 'whatsapp';
       if (channel === 'email') {
-        const subject = `Richiesta listino HORECA — ${data.locale}`;
+        const subject = tr(L.mail.subject, { l: data.locale });
         window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(composeMessage(data, false))}`;
       } else {
         openExternal(buildWhatsAppUrl(composeMessage(data, true)));
@@ -1656,12 +1753,12 @@
     // texture WebGL caricate da file: in quel caso si usano le etichette
     // incorporate in HERO_BOTTLE.inline (data URI).
     const placeLabels = (urls) => {
-      addLabel(urls.fronte, { height: 2.15, arc: 1.68, centerY: -0.75, facing: 0 });
-      addLabel(urls.retro, { height: 1.84, arc: 1.48, centerY: -0.62, facing: Math.PI });
+      addLabel(asset(urls.fronte), { height: 2.15, arc: 1.68, centerY: -0.75, facing: 0 });
+      addLabel(asset(urls.retro), { height: 1.84, arc: 1.48, centerY: -0.62, facing: Math.PI });
     };
     if (window.location.protocol === 'file:' && HERO_BOTTLE.inline) {
       const script = document.createElement('script');
-      script.src = HERO_BOTTLE.inline;
+      script.src = asset(HERO_BOTTLE.inline);
       script.onload = () => placeLabels(window.SFM_HERO_LABELS || HERO_BOTTLE);
       script.onerror = () => placeLabels(HERO_BOTTLE);
       document.head.appendChild(script);
@@ -1712,16 +1809,17 @@
     const ctx = dot.getContext('2d');
     const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.35, 'rgba(255,255,255,.45)');
+    grad.addColorStop(0.25, 'rgba(255,255,255,.9)');
+    grad.addColorStop(0.55, 'rgba(255,255,255,.3)');
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 64, 64);
 
     const particleMat = new THREE.PointsMaterial({
-      size: isMobile ? 0.07 : 0.06,
+      size: isMobile ? 0.17 : 0.15,    // dimensione dei puntini
       map: new THREE.CanvasTexture(dot),
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.95,                   // luminosità dei puntini
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true
@@ -2009,6 +2107,7 @@
     if (year) year.textContent = String(new Date().getFullYear());
 
     initHeader();
+    initLangSwitch();
     initMobileNav();
     initActiveLinks();
     initWhatsAppLinks();
