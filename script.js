@@ -1268,11 +1268,19 @@
       to: parseFloat(el.dataset.to)
     }));
     const FADE = 0.05; // durata delle dissolvenze (in frazione di scroll)
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
 
+    // --- Geometria in cache: durante lo scroll si legge solo window.scrollY,
+    //     così il browser non deve ricalcolare l'impaginazione a ogni evento.
+    let sectionTop = 0;
+    let sectionH = 0;
+    const measureGeometry = () => {
+      sectionTop = section.getBoundingClientRect().top + window.scrollY;
+      sectionH = section.offsetHeight;
+    };
     const measure = () => {
-      const total = section.offsetHeight - window.innerHeight;
-      const top = section.getBoundingClientRect().top;
-      heroScroll.target = total > 0 ? clamp(-top / total, 0, 1) : 0;
+      const total = sectionH - window.innerHeight;
+      heroScroll.target = total > 0 ? clamp((window.scrollY - sectionTop) / total, 0, 1) : 0;
     };
 
     // "Volo" del logo (tecnica FLIP): si misura la posizione del monogramma
@@ -1290,42 +1298,70 @@
       flip = { dx: b.left - a.left, dy: b.top - a.top, s: b.height / a.height };
     };
 
-    const setVisible = (el, a) => {
-      el.style.opacity = a.toFixed(3);
-      el.style.visibility = a < 0.01 ? 'hidden' : 'visible';
+    // --- Scritture di stile solo quando il valore cambia davvero
+    const set = (el, prop, value) => {
+      const cache = el._sfm || (el._sfm = {});
+      if (cache[prop] === value) return;
+      cache[prop] = value;
+      el.style[prop] = value;
     };
+    const setVisible = (el, a) => {
+      set(el, 'opacity', a.toFixed(3));
+      set(el, 'visibility', a < 0.01 ? 'hidden' : 'visible');
+    };
+    let monoAnimating = !!(mono && mono.classList.contains('hero-in'));
+    let brandHidden = null;
 
     const apply = (p) => {
       // 1. Logo: la scritta sfuma, il monogramma vola nell'header
       const k = smoothstep(0.01, BRAND_DOCK, p);
       if (mono) {
-        mono.style.transform = `translate(${(flip.dx * k).toFixed(1)}px, ${(flip.dy * k).toFixed(1)}px) scale(${lerp(1, flip.s, k).toFixed(4)})`;
-        if (!mono.classList.contains('hero-in')) setVisible(mono, 1 - smoothstep(BRAND_DOCK - 0.008, BRAND_DOCK, p));
+        set(mono, 'transform', `translate3d(${(flip.dx * k).toFixed(1)}px, ${(flip.dy * k).toFixed(1)}px, 0) scale(${lerp(1, flip.s, k).toFixed(4)})`);
+        if (!monoAnimating) setVisible(mono, 1 - smoothstep(BRAND_DOCK - 0.008, BRAND_DOCK, p));
       }
       if (rest) {
         setVisible(rest, 1 - smoothstep(0, 0.05, p));
-        rest.style.translate = `0 ${(smoothstep(0, 0.06, p) * 40).toFixed(1)}px`;
+        set(rest, 'translate', `0 ${(smoothstep(0, 0.06, p) * 40).toFixed(1)}px`);
       }
-      if (header) header.classList.toggle('hide-brand', p < BRAND_DOCK - 0.004);
-      if (indicator) indicator.style.opacity = (1 - smoothstep(0, 0.04, p)).toFixed(3);
+      const hide = p < BRAND_DOCK - 0.004;
+      if (header && hide !== brandHidden) {
+        brandHidden = hide;
+        header.classList.toggle('hide-brand', hide);
+      }
+      if (indicator) set(indicator, 'opacity', (1 - smoothstep(0, 0.04, p)).toFixed(3));
 
       // 2. Capitoli: dissolvenza in entrata e in uscita nel proprio intervallo
       chapters.forEach((c) => {
         const a = smoothstep(c.from, c.from + FADE, p) * (1 - smoothstep(c.to - FADE, c.to, p));
         setVisible(c.el, a);
-        c.el.style.translate = `0 ${((1 - a) * 28).toFixed(1)}px`;
-        c.el.classList.toggle('is-active', a > 0.5);
+        set(c.el, 'translate', `0 ${((1 - a) * 28).toFixed(1)}px`);
+        const active = a > 0.5;
+        if (c.active !== active) {
+          c.active = active;
+          c.el.classList.toggle('is-active', active);
+        }
       });
 
-      if (bar) bar.style.transform = `scaleX(${p.toFixed(4)})`;
+      if (bar) set(bar, 'transform', `scaleX(${p.toFixed(4)})`);
     };
 
+    // --- Inseguimento morbido dello scroll, indipendente dalla frequenza dello
+    //     schermo (60/90/120 Hz): più reattivo su touch, più fluido col mouse.
+    const FOLLOW = isTouch ? 16 : 10;
     let rafId = null;
-    const tick = () => {
-      heroScroll.progress = lerp(heroScroll.progress, heroScroll.target, 0.12);
-      if (Math.abs(heroScroll.progress - heroScroll.target) < 0.0004) heroScroll.progress = heroScroll.target;
+    let lastT = 0;
+    const tick = (now) => {
+      const dt = lastT ? Math.min((now - lastT) / 1000, 0.1) : 1 / 60;
+      lastT = now;
+      heroScroll.progress += (heroScroll.target - heroScroll.progress) * (1 - Math.exp(-FOLLOW * dt));
+      if (Math.abs(heroScroll.progress - heroScroll.target) < 0.0003) heroScroll.progress = heroScroll.target;
       apply(heroScroll.progress);
-      rafId = heroScroll.progress !== heroScroll.target ? requestAnimationFrame(tick) : null;
+      if (heroScroll.progress !== heroScroll.target) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = null;
+        lastT = 0;
+      }
     };
     const kick = () => {
       measure();
@@ -1333,23 +1369,34 @@
     };
 
     window.addEventListener('scroll', kick, { passive: true });
+
+    // Resize: su telefono la barra degli indirizzi cambia solo l'altezza della
+    // finestra; la geometria si rimisura solo quando cambia la larghezza.
+    let lastW = window.innerWidth;
     window.addEventListener('resize', () => {
-      measureFlip();
-      apply(heroScroll.progress);
+      if (window.innerWidth !== lastW) {
+        lastW = window.innerWidth;
+        measureGeometry();
+        measureFlip();
+        apply(heroScroll.progress);
+      }
       kick();
     });
+    window.addEventListener('load', () => { measureGeometry(); kick(); }, { once: true });
 
     // L'animazione d'ingresso del monogramma controlla la sua opacità:
     // finita quella, il controllo passa allo scroll.
     if (mono) {
       mono.addEventListener('animationend', () => {
         mono.classList.remove('hero-in');
+        monoAnimating = false;
         measureFlip();
         apply(heroScroll.progress);
       }, { once: true });
       if (!mono.complete) mono.addEventListener('load', () => { measureFlip(); apply(heroScroll.progress); }, { once: true });
     }
 
+    measureGeometry();
     measure();
     measureFlip();
     heroScroll.progress = heroScroll.target;
@@ -1570,6 +1617,13 @@
     // fronte è centrata su 0 e il retro su PI.
     const loader = new THREE.TextureLoader();
     const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), lowPower ? 4 : 8);
+    // Texture provvisoria (1 pixel scuro) con le stesse impostazioni di quella
+    // vera: quando la foto arriva si scambia solo l'immagine, senza ricompilare
+    // gli shader a metà animazione (causa di scatti).
+    const placeholderTex = new THREE.DataTexture(new Uint8Array([12, 10, 10, 255]), 1, 1, THREE.RGBAFormat);
+    placeholderTex.encoding = THREE.sRGBEncoding;
+    placeholderTex.needsUpdate = true;
+
     const addLabel = (url, { height, arc, centerY, facing }) => {
       const thetaLength = arc / BODY_R;
       const geo = new THREE.CylinderGeometry(BODY_R + 0.006, BODY_R + 0.006, height, segments, 1, true, facing - thetaLength / 2, thetaLength);
@@ -1577,25 +1631,23 @@
       // reali dell'etichetta, mentre le luci aggiungono il volume sui lati.
       const mat = new THREE.MeshStandardMaterial({
         color: 0x3a3a3a,
+        map: placeholderTex,
         emissive: 0xffffff,
-        emissiveIntensity: 0, // attivata al caricamento della texture
+        emissiveMap: placeholderTex,
+        emissiveIntensity: 0.55,
         roughness: 0.8,
         metalness: 0,
         toneMapped: false
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.y = centerY;
-      mesh.visible = false; // mostrata solo a texture caricata
       bottle.add(mesh);
 
       loader.load(url, (tex) => {
         tex.encoding = THREE.sRGBEncoding;
         tex.anisotropy = maxAniso;
-        mat.map = tex;
+        mat.map = tex;          // stesso tipo di texture: nessuna ricompilazione
         mat.emissiveMap = tex;
-        mat.emissiveIntensity = 0.55;
-        mat.needsUpdate = true;
-        mesh.visible = true;
         if (!running) renderFrame(0); // aggiorna il frame statico (movimento ridotto)
       });
     };
@@ -1938,6 +1990,8 @@
     // Fase iniziale dell'oscillazione: etichetta leggermente di tre quarti
     elapsed = -0.9;
     resize(true);
+    // Compila subito tutti gli shader della scena, prima che parta l'animazione
+    try { renderer.compile(scene, camera); } catch (err) { /* facoltativo */ }
     // I capitoli cambiano altezza quando arrivano i font: si ricalcola la posa
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resize(true));
     renderFrame(0);
