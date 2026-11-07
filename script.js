@@ -43,6 +43,9 @@
       productInfo: 'Richiedi info', productInfoAria: 'Richiedi informazioni: {p}',
       productZoom: 'Ingrandisci la foto {i} di {n}: {p}', photo: 'foto', of: 'di',
       prevPhoto: 'Foto precedente', nextPhoto: 'Foto successiva',
+      sheetOpen: 'Apri la scheda 3D: {p}', sheetLabel: 'Scheda prodotto: {p}', sheetClose: 'Chiudi la scheda',
+      sheetHint: 'Trascina per ruotare', sheetFront: 'Fronte', sheetBack: 'Retro', sheetPhotos: 'Foto', sheetBadge: 'Vista 3D',
+      sheetRotate: 'Ruota la bottiglia',
       noProducts: 'Nessun prodotto in questa categoria al momento. Contattaci per conoscere le novità.',
       eventKicker: 'Serata evento', eventPast: 'Concluso', at: 'ore',
       eventBookPhone: 'Prenota il tavolo', eventBookWa: 'Prenota su WhatsApp',
@@ -74,6 +77,9 @@
       productInfo: 'Ask for info', productInfoAria: 'Ask for information: {p}',
       productZoom: 'Enlarge photo {i} of {n}: {p}', photo: 'photo', of: 'of',
       prevPhoto: 'Previous photo', nextPhoto: 'Next photo',
+      sheetOpen: 'Open the 3D view: {p}', sheetLabel: 'Product sheet: {p}', sheetClose: 'Close the sheet',
+      sheetHint: 'Drag to rotate', sheetFront: 'Front', sheetBack: 'Back', sheetPhotos: 'Photos', sheetBadge: '3D view',
+      sheetRotate: 'Rotate the bottle',
       noProducts: 'No products in this category at the moment. Contact us to hear about new arrivals.',
       eventKicker: 'Event night', eventPast: 'Past event', at: 'at',
       eventBookPhone: 'Book a table', eventBookWa: 'Book on WhatsApp',
@@ -467,6 +473,384 @@
 
 
   /* ========================================================================
+     02a. SCHEDA PRODOTTO 3D
+     Al clic su un prodotto si apre una scheda a tutto schermo con la bottiglia
+     in 3D, ricostruita dalle foto: la forma è il profilo reale della bottiglia
+     (dalla foto frontale), la superficie è la foto fronte + retro "avvolta"
+     sul vetro. Dati generati da .claude/genera-bottiglie.py:
+       assets/prodotti/3d/bottiglie.js  → profili (raggio, altezza)
+       assets/prodotti/3d/<slug>.jpg    → texture srotolata
+     Trascina per ruotare (con inerzia), pulsanti Fronte / Retro, rotazione
+     automatica lenta quando è ferma. Senza WebGL: si mostra la foto.
+     ======================================================================== */
+  const openProductSheet = (() => {
+    let dlg, stage, canvas, fallbackImg, info, btnFront, btnBack, btnPhotos, hint;
+    let three = null;          // { renderer, scene, camera, bottle, ... } creato al primo uso
+    let profilesPromise = null;
+    let current = null;        // prodotto aperto
+    let currentImages = [];
+    let rafId = null;
+    let token = 0;             // evita che un caricamento vecchio sovrascriva quello nuovo
+
+    const slugOf = (images) => {
+      const m = /([\w-]+?)(?:-retro(?:-\d)?)?\.jpg$/.exec(images[0] || '');
+      return m ? m[1] : '';
+    };
+
+    const loadProfiles = () => {
+      if (window.SFM_BOTTIGLIE) return Promise.resolve(window.SFM_BOTTIGLIE);
+      if (!profilesPromise) {
+        profilesPromise = new Promise((resolve, reject) => {
+          const sc = document.createElement('script');
+          sc.src = asset('assets/prodotti/3d/bottiglie.js');
+          sc.async = true;
+          sc.onload = () => (window.SFM_BOTTIGLIE ? resolve(window.SFM_BOTTIGLIE) : reject(new Error('dati')));
+          sc.onerror = () => { profilesPromise = null; reject(new Error('rete')); };
+          document.head.appendChild(sc);
+        });
+      }
+      return profilesPromise;
+    };
+
+    const ICON = {
+      close: '<path d="M6 6l12 12M18 6L6 18"/>',
+      rotate: '<path d="M4 12a8 8 0 0 1 14.3-4.9M20 12a8 8 0 0 1-14.3 4.9"/><path d="M18.5 3.5v4h-4M5.5 20.5v-4h4"/>',
+      photo: '<rect x="3.5" y="5.5" width="17" height="13" rx="1"/><circle cx="9" cy="10.5" r="1.6"/><path d="M20.5 15.5l-5-5-8 8"/>',
+      arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>'
+    };
+    const svg = (k, w = 1.4) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="${w}">${ICON[k]}</svg>`;
+
+    const build = () => {
+      dlg = document.createElement('dialog');
+      dlg.className = 'product-sheet';
+      dlg.innerHTML = `
+        <div class="product-sheet__inner">
+          <button class="product-sheet__close" type="button" data-close aria-label="${escapeHTML(L.sheetClose)}">${svg('close')}</button>
+          <div class="product-sheet__stage" aria-label="${escapeHTML(L.sheetRotate)}">
+            <canvas class="product-sheet__canvas"></canvas>
+            <img class="product-sheet__fallback" alt="" hidden>
+            <div class="product-sheet__loader" aria-hidden="true"></div>
+            <p class="product-sheet__hint" aria-hidden="true">${svg('rotate')}<span>${escapeHTML(L.sheetHint)}</span></p>
+            <div class="product-sheet__views">
+              <button type="button" data-view="front" class="is-active">${escapeHTML(L.sheetFront)}</button>
+              <button type="button" data-view="back">${escapeHTML(L.sheetBack)}</button>
+              <button type="button" data-view="photos" class="product-sheet__photos" aria-label="${escapeHTML(L.sheetPhotos)}">${svg('photo')}</button>
+            </div>
+          </div>
+          <div class="product-sheet__info"></div>
+        </div>`;
+      document.body.appendChild(dlg);
+      stage = $('.product-sheet__stage', dlg);
+      canvas = $('.product-sheet__canvas', dlg);
+      fallbackImg = $('.product-sheet__fallback', dlg);
+      info = $('.product-sheet__info', dlg);
+      hint = $('.product-sheet__hint', dlg);
+      btnFront = $('[data-view="front"]', dlg);
+      btnBack = $('[data-view="back"]', dlg);
+      btnPhotos = $('[data-view="photos"]', dlg);
+
+      dlg.addEventListener('click', (ev) => {
+        if (ev.target === dlg || ev.target.closest('[data-close]')) dlg.close();
+      });
+      dlg.addEventListener('close', () => {
+        stopLoop();
+        document.documentElement.classList.remove('sheet-open');
+        document.dispatchEvent(new CustomEvent('sfm:scheda', { detail: false }));
+      });
+      btnFront.addEventListener('click', () => turnTo(0));
+      btnBack.addEventListener('click', () => turnTo(Math.PI));
+      btnPhotos.addEventListener('click', () => {
+        if (current) openViewer(currentImages, 0, `${current.nome} – ${field(current, 'cantina')}`);
+      });
+      dlg.addEventListener('keydown', (ev) => {
+        if (!three) return;
+        if (ev.key === 'ArrowLeft') { state.vel = 0; state.target = state.rot - 0.6; state.auto = false; }
+        if (ev.key === 'ArrowRight') { state.vel = 0; state.target = state.rot + 0.6; state.auto = false; }
+      });
+    };
+
+    // --- Stato della rotazione ---------------------------------------------
+    const state = { rot: 0, vel: 0, tilt: 0, tiltT: 0, target: null, auto: true, idleAt: 0, dragging: false };
+
+    const turnTo = (angle) => {
+      // rotazione più breve verso l'angolo richiesto
+      const TWO_PI = Math.PI * 2;
+      let d = ((angle - state.rot) % TWO_PI + TWO_PI) % TWO_PI;
+      if (d > Math.PI) d -= TWO_PI;
+      state.target = state.rot + d;
+      state.vel = 0;
+      state.auto = false;
+      state.idleAt = performance.now();
+      startLoop();
+    };
+
+    const updateViewButtons = () => {
+      const a = ((state.rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const back = a > Math.PI / 2 && a < Math.PI * 1.5;
+      btnFront.classList.toggle('is-active', !back);
+      btnBack.classList.toggle('is-active', back);
+    };
+
+    const bindDrag = () => {
+      let lastX = 0, lastY = 0, lastT = 0, id = null;
+      stage.addEventListener('pointerdown', (ev) => {
+        if (ev.target.closest('button')) return;
+        id = ev.pointerId;
+        stage.setPointerCapture(id);
+        state.dragging = true; state.auto = false; state.target = null; state.vel = 0;
+        lastX = ev.clientX; lastY = ev.clientY; lastT = performance.now();
+        stage.classList.add('is-dragging');
+        hint.classList.add('is-hidden');
+        startLoop();
+      });
+      stage.addEventListener('pointermove', (ev) => {
+        if (!state.dragging || ev.pointerId !== id) return;
+        const now = performance.now();
+        const k = 6.5 / Math.max(stage.clientWidth, 320);   // ~1 giro ogni ~1 larghezza
+        const dx = (ev.clientX - lastX) * k;
+        state.rot += dx;
+        state.vel = dx / Math.max(1, now - lastT) * 16.7;   // radianti/fotogramma
+        state.tiltT = clamp(state.tiltT + (ev.clientY - lastY) * 0.004, -0.35, 0.35);
+        lastX = ev.clientX; lastY = ev.clientY; lastT = now;
+      });
+      const end = (ev) => {
+        if (ev.pointerId !== id) return;
+        state.dragging = false; id = null;
+        state.idleAt = performance.now();
+        stage.classList.remove('is-dragging');
+      };
+      stage.addEventListener('pointerup', end);
+      stage.addEventListener('pointercancel', end);
+    };
+
+    // --- Scena 3D (creata una sola volta) ------------------------------------
+    const initThree = () => {
+      if (three !== null) return three;
+      three = false;
+      const THREE = window.THREE;
+      if (!THREE) return three;
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+      } catch (err) {
+        return three;
+      }
+      const lowPower = window.matchMedia('(max-width: 767px), (pointer: coarse)').matches
+        || (navigator.hardwareConcurrency || 8) <= 4;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? 1.75 : 2));
+      renderer.setClearColor(0x000000, 0);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+      camera.position.set(0, 0.2, 15.5);
+      camera.lookAt(0, 0, 0);
+
+      // Riflessi da studio fotografico (softbox) per la lucentezza del vetro
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const envScene = new THREE.Scene();
+      const mats = [];
+      const box = (w, h, k, x, y, z, ry = 0, rx = 0) => {
+        const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide });
+        mats.push(m);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+        mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, 0);
+        envScene.add(mesh);
+      };
+      box(2.2, 12, 3, -6, 0, 2, Math.PI / 2);
+      box(0.3, 12, 5, 6, 0, 0.5, -Math.PI / 2);
+      box(4, 4, 1.2, 0, 7, 0, 0, Math.PI / 2);
+      const envMap = pmrem.fromScene(envScene, 0.03).texture;
+      mats.forEach((m) => m.dispose());
+      pmrem.dispose();
+
+      const bottle = new THREE.Group();
+      scene.add(bottle);
+
+      // Superficie: la foto (già illuminata) senza luci aggiuntive
+      const photoMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+      // Lucentezza: solo i riflessi speculari, sommati sopra la foto
+      const glossMat = new THREE.MeshStandardMaterial({
+        color: 0x000000, metalness: 0, roughness: 0.08, envMap, envMapIntensity: 0.55,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      // Riflesso a terra
+      const shadowCanvas = document.createElement('canvas');
+      shadowCanvas.width = shadowCanvas.height = 128;
+      const sctx = shadowCanvas.getContext('2d');
+      const grd = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grd.addColorStop(0, 'rgba(255,255,255,0.22)');
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      sctx.fillStyle = grd; sctx.fillRect(0, 0, 128, 128);
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.2, 1.1),
+        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -3.02;
+      scene.add(floor);
+
+      const loader = new THREE.TextureLoader();
+      const segments = lowPower ? 96 : 160;
+
+      const setBottle = (profile, tex) => {
+        bottle.children.slice().forEach((c) => { bottle.remove(c); c.geometry.dispose(); });
+        const pts = [new THREE.Vector2(0, profile[0][1])]
+          .concat(profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y)))
+          .concat([new THREE.Vector2(0, profile[profile.length - 1][1])]);
+        const geo = new THREE.LatheGeometry(pts, segments);
+        // coordinate verticali della texture = altezza reale (non l'indice del punto)
+        const pos = geo.attributes.position;
+        const uv = geo.attributes.uv;
+        for (let i = 0; i < pos.count; i++) uv.setY(i, clamp((pos.getY(i) + 3) / 6, 0, 1));
+        uv.needsUpdate = true;
+        if (photoMat.map && photoMat.map !== tex) photoMat.map.dispose();
+        photoMat.map = tex;
+        photoMat.needsUpdate = true;
+        bottle.add(new THREE.Mesh(geo, photoMat));
+        const gloss = new THREE.Mesh(geo, glossMat);
+        gloss.scale.setScalar(1.004);
+        bottle.add(gloss);
+        // larghezza massima → per centrare bene bottiglie basse e larghe
+        bottle.userData.maxR = Math.max(...profile.map((p) => p[0]));
+      };
+
+      const resize = () => {
+        const w = stage.clientWidth || 1;
+        const h = stage.clientHeight || 1;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        // inquadra la bottiglia intera, anche su schermi stretti
+        const fitH = 8.3;                 // bottiglia (6) + spazio per suggerimento e pulsanti
+        const fitW = (bottle.userData.maxR || 1) * 2 + 2.2;
+        const vFov = THREE.MathUtils.degToRad(camera.fov);
+        const distH = fitH / 2 / Math.tan(vFov / 2);
+        const distW = fitW / 2 / (Math.tan(vFov / 2) * camera.aspect);
+        camera.position.set(0, -0.3, Math.max(distH, distW));
+        camera.lookAt(0, -0.3, 0);         // bottiglia un po' più in alto dei pulsanti
+        camera.updateProjectionMatrix();
+      };
+      window.addEventListener('resize', () => { if (dlg.open) { resize(); render(); } });
+
+      const render = () => renderer.render(scene, camera);
+
+      three = { THREE, renderer, scene, camera, bottle, loader, setBottle, resize, render, floor };
+      bindDrag();
+      return three;
+    };
+
+    // --- Animazione -------------------------------------------------------
+    let lastT = 0;
+    const loop = (now) => {
+      rafId = requestAnimationFrame(loop);
+      const dt = Math.min((now - (lastT || now)) / 16.7, 3);   // in "fotogrammi a 60 fps"
+      lastT = now;
+      if (!state.dragging) {
+        if (state.target !== null) {
+          const d = state.target - state.rot;
+          state.rot += d * (1 - Math.pow(0.86, dt));
+          if (Math.abs(d) < 0.002) { state.rot = state.target; state.target = null; }
+        } else if (Math.abs(state.vel) > 0.0005) {
+          state.rot += state.vel * dt;
+          state.vel *= Math.pow(0.94, dt);                       // inerzia
+        } else if (!prefersReducedMotion()) {
+          if (!state.auto && now - state.idleAt > 3500) state.auto = true;
+          if (state.auto) state.rot += 0.0045 * dt;              // rotazione lenta automatica
+        }
+        state.tiltT *= Math.pow(0.95, dt);
+      }
+      state.tilt += (state.tiltT - state.tilt) * (1 - Math.pow(0.85, dt));
+      three.bottle.rotation.y = state.rot;
+      three.bottle.rotation.x = state.tilt;
+      updateViewButtons();
+      three.render();
+    };
+    const startLoop = () => {
+      if (!three || rafId) return;
+      lastT = 0;
+      rafId = requestAnimationFrame(loop);
+    };
+    const stopLoop = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+    };
+
+    const renderInfo = (p) => {
+      const categoria = CATEGORIE[p.categoria] || '';
+      const nomeCompleto = `${p.nome} – ${field(p, 'cantina')}`;
+      info.innerHTML = `
+        <p class="product-sheet__kicker">${escapeHTML(categoria)}${p.regione ? ` <span aria-hidden="true">·</span> ${escapeHTML(p.regione)}` : ''}</p>
+        <h2 class="product-sheet__name" id="product-sheet-title">${escapeHTML(p.nome)}</h2>
+        <p class="product-sheet__winery">${escapeHTML(field(p, 'cantina'))}</p>
+        <p class="product-sheet__desc">${escapeHTML(field(p, 'descrizione'))}</p>
+        <a class="btn btn--solid product-sheet__cta" href="${buildWhatsAppUrl(productMessage(p))}" target="_blank" rel="noopener"
+           aria-label="${escapeHTML(tr(L.productInfoAria, { p: nomeCompleto }))}">
+          <span>${L.productInfo}</span>${svg('arrow', 1.5)}
+        </a>`;
+      dlg.setAttribute('aria-labelledby', 'product-sheet-title');
+    };
+
+    const showFallback = (src) => {
+      canvas.hidden = true;
+      hint.hidden = true;
+      btnFront.hidden = btnBack.hidden = true;
+      fallbackImg.hidden = false;
+      fallbackImg.src = src;
+      fallbackImg.alt = current ? `${current.nome} – ${field(current, 'cantina')}` : '';
+      stage.classList.remove('is-loading');
+    };
+
+    return (p, images) => {
+      if (!dlg) build();
+      current = p;
+      currentImages = images.slice();
+      const my = ++token;
+      renderInfo(p);
+      btnPhotos.hidden = !images.length;
+
+      // stato iniziale: bottiglia di fronte, leggermente ruotata, che "entra"
+      Object.assign(state, { rot: -0.9, vel: 0, tilt: 0, tiltT: 0, target: 0, auto: false, idleAt: performance.now(), dragging: false });
+      hint.classList.remove('is-hidden');
+      stage.classList.add('is-loading');
+
+      if (typeof dlg.showModal === 'function') dlg.showModal();
+      else dlg.setAttribute('open', '');
+      document.documentElement.classList.add('sheet-open');
+      document.dispatchEvent(new CustomEvent('sfm:scheda', { detail: true }));
+      $('.product-sheet__close', dlg).focus({ preventScroll: true });
+
+      const slug = slugOf(images);
+      const t = initThree();
+      if (!t || !slug) { showFallback(images[0] || ''); return; }
+      canvas.hidden = false; fallbackImg.hidden = true; hint.hidden = false;
+      btnFront.hidden = btnBack.hidden = false;
+      t.bottle.visible = false;
+      t.resize();
+      t.render();
+
+      const texPromise = new Promise((resolve, reject) => {
+        t.loader.load(asset(`assets/prodotti/3d/${slug}.jpg`), resolve, undefined, reject);
+      });
+      Promise.all([loadProfiles(), texPromise]).then(([profiles, tex]) => {
+        if (my !== token) { tex.dispose(); return; }
+        const profile = profiles[slug];
+        if (!profile) throw new Error('profilo mancante');
+        tex.encoding = t.THREE.sRGBEncoding;
+        tex.anisotropy = Math.min(8, t.renderer.capabilities.getMaxAnisotropy());
+        tex.wrapS = t.THREE.RepeatWrapping;
+        t.setBottle(profile, tex);
+        t.bottle.visible = true;
+        t.resize();
+        stage.classList.remove('is-loading');
+        startLoop();
+      }).catch(() => {
+        if (my === token) showFallback(images[0] || '');
+      });
+    };
+  })();
+
+
+  /* ========================================================================
      02b. CONSENSO COOKIE (GDPR / linee guida Garante Privacy 2021)
      - Al primo accesso compare il banner con "Rifiuta" e "Accetta" di pari
        evidenza e "Personalizza"; chiudere con la X equivale a rifiutare.
@@ -817,9 +1201,10 @@
       <article class="product">
         <div class="product__media">
           <span class="product__badge">${escapeHTML(categoria)}</span>
+          ${n ? `<span class="product__3d" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>${L.sheetBadge}</span>` : ''}
           ${n ? `<div class="product__slides">
             ${images.map((src, i) => `
-              <button class="product__slide" type="button" data-i="${i}" aria-label="${escapeHTML(tr(L.productZoom, { i: i + 1, n, p: nomeCompleto }))}">
+              <button class="product__slide" type="button" data-i="${i}" aria-label="${escapeHTML(tr(L.sheetOpen, { p: nomeCompleto }))}">
                 <img src="${escapeHTML(src)}" alt="${escapeHTML(nomeCompleto)}${multi ? ` (${L.photo} ${i + 1})` : ''}" loading="lazy" decoding="async" width="750" height="1000">
               </button>`).join('')}
           </div>` : ''}
@@ -866,13 +1251,12 @@
       }, { once: true });
     });
 
-    // Clic sulla foto → visualizzatore a tutto schermo, dalla foto cliccata
+    // Clic sulla foto → scheda prodotto con la bottiglia in 3D
     slides.addEventListener('click', (ev) => {
-      const slide = ev.target.closest('.product__slide');
-      if (!slide) return;
-      const src = $('img', slide).getAttribute('src');
-      openViewer(images, Math.max(0, images.indexOf(src)), nomeCompleto);
+      if (!ev.target.closest('.product__slide')) return;
+      openProductSheet(p, images);
     });
+    $('.product__name', li).addEventListener('click', () => openProductSheet(p, images));
 
     if (multi) {
       const current = () => Math.round(slides.scrollLeft / slides.clientWidth);
@@ -2208,7 +2592,13 @@
     // sito): fuori dall'hero si nasconde solo la bottiglia, così si disegnano
     // soltanto i puntini, che costano pochissimo. Pausa con la scheda in background.
     window.addEventListener('load', measureHeroEnd, { once: true });
-    document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+    let sheetOpen = false;
+    document.addEventListener('visibilitychange', () => (document.hidden || sheetOpen ? stop() : start()));
+    // Scheda prodotto 3D aperta: la scena dell'hero si ferma (un solo WebGL attivo)
+    document.addEventListener('sfm:scheda', (ev) => {
+      sheetOpen = !!ev.detail;
+      if (sheetOpen) stop(); else start();
+    });
 
     // Preferenza di movimento ridotto: un solo frame statico
     motionQuery.addEventListener('change', () => {
