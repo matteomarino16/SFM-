@@ -553,6 +553,7 @@
         if (ev.target === dlg || ev.target.closest('[data-close]')) dlg.close();
       });
       dlg.addEventListener('close', () => {
+        if (dlg.open) return;   // riaperta subito con un altro prodotto
         stopLoop();
         document.documentElement.classList.remove('sheet-open');
         document.dispatchEvent(new CustomEvent('sfm:scheda', { detail: false }));
@@ -564,41 +565,44 @@
       });
       dlg.addEventListener('keydown', (ev) => {
         if (!three) return;
-        if (ev.key === 'ArrowLeft') { state.vel = 0; state.target = state.rot - 0.6; state.auto = false; }
-        if (ev.key === 'ArrowRight') { state.vel = 0; state.target = state.rot + 0.6; state.auto = false; }
+        if (ev.key === 'ArrowLeft') turnTo(state.goal - 0.6);
+        if (ev.key === 'ArrowRight') turnTo(state.goal + 0.6);
       });
     };
 
-    // --- Stato della rotazione ---------------------------------------------
-    const state = { rot: 0, vel: 0, tilt: 0, tiltT: 0, target: null, auto: true, idleAt: 0, dragging: false };
+    // --- Rotazione ---------------------------------------------------------
+    // Il dito/mouse sposta un "obiettivo"; la bottiglia lo segue con un
+    // inseguimento morbido, poi prosegue per inerzia e rallenta da sola.
+    const state = { rot: 0, goal: 0, vel: 0, dragging: false, auto: 0, idleAt: 0 };
+    const TWO_PI = Math.PI * 2;
 
     const turnTo = (angle) => {
       // rotazione più breve verso l'angolo richiesto
-      const TWO_PI = Math.PI * 2;
-      let d = ((angle - state.rot) % TWO_PI + TWO_PI) % TWO_PI;
+      let d = ((angle - state.goal) % TWO_PI + TWO_PI) % TWO_PI;
       if (d > Math.PI) d -= TWO_PI;
-      state.target = state.rot + d;
+      state.goal += d;
       state.vel = 0;
-      state.auto = false;
+      state.auto = 0;
       state.idleAt = performance.now();
+      hint.classList.add('is-hidden');
       startLoop();
     };
 
     const updateViewButtons = () => {
-      const a = ((state.rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const a = ((state.rot % TWO_PI) + TWO_PI) % TWO_PI;
       const back = a > Math.PI / 2 && a < Math.PI * 1.5;
       btnFront.classList.toggle('is-active', !back);
       btnBack.classList.toggle('is-active', back);
     };
 
     const bindDrag = () => {
-      let lastX = 0, lastY = 0, lastT = 0, id = null;
+      let lastX = 0, lastT = 0, id = null;
       stage.addEventListener('pointerdown', (ev) => {
         if (ev.target.closest('button')) return;
         id = ev.pointerId;
         stage.setPointerCapture(id);
-        state.dragging = true; state.auto = false; state.target = null; state.vel = 0;
-        lastX = ev.clientX; lastY = ev.clientY; lastT = performance.now();
+        state.dragging = true; state.vel = 0; state.auto = 0;
+        lastX = ev.clientX; lastT = performance.now();
         stage.classList.add('is-dragging');
         hint.classList.add('is-hidden');
         startLoop();
@@ -606,16 +610,18 @@
       stage.addEventListener('pointermove', (ev) => {
         if (!state.dragging || ev.pointerId !== id) return;
         const now = performance.now();
-        const k = 6.5 / Math.max(stage.clientWidth, 320);   // ~1 giro ogni ~1 larghezza
-        const dx = (ev.clientX - lastX) * k;
-        state.rot += dx;
-        state.vel = dx / Math.max(1, now - lastT) * 16.7;   // radianti/fotogramma
-        state.tiltT = clamp(state.tiltT + (ev.clientY - lastY) * 0.004, -0.35, 0.35);
-        lastX = ev.clientX; lastY = ev.clientY; lastT = now;
+        // un giro completo ≈ una volta e mezza la larghezza dell'area
+        const da = (ev.clientX - lastX) * TWO_PI / (Math.max(stage.clientWidth, 300) * 1.5);
+        state.goal += da;
+        const frames = Math.max(1, (now - lastT) / 16.7);
+        state.vel = lerp(state.vel, da / frames, 0.5);
+        lastX = ev.clientX; lastT = now;
       });
       const end = (ev) => {
         if (ev.pointerId !== id) return;
         state.dragging = false; id = null;
+        if (performance.now() - lastT > 90) state.vel = 0;   // fermo prima di lasciare
+        state.vel = clamp(state.vel, -0.12, 0.12);
         state.idleAt = performance.now();
         stage.classList.remove('is-dragging');
       };
@@ -624,6 +630,16 @@
     };
 
     // --- Scena 3D (creata una sola volta) ------------------------------------
+    // Vetro, capsula ed etichette sono materiali distinti (mappa materiali):
+    // il vetro è lucido con riflessi da studio FISSI rispetto alle luci, così
+    // ruotando la bottiglia i riflessi scorrono sul vetro come nella realtà.
+    const LIQUIDI = {
+      rosso: { c: 0x7a0c1c, k: 1.0 },
+      rosato: { c: 0xff6f7d, k: 0.85 },
+      bianco: { c: 0xe8c45a, k: 0.75 },
+      amaro: { c: 0x8a3c12, k: 0.9 }
+    };
+
     const initThree = () => {
       if (three !== null) return three;
       three = false;
@@ -637,18 +653,19 @@
       }
       const lowPower = window.matchMedia('(max-width: 767px), (pointer: coarse)').matches
         || (navigator.hardwareConcurrency || 8) <= 4;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? 1.75 : 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? 2 : 2));
       renderer.setClearColor(0x000000, 0);
       renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
-      camera.position.set(0, 0.2, 15.5);
-      camera.lookAt(0, 0, 0);
+      const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
 
-      // Riflessi da studio fotografico (softbox) per la lucentezza del vetro
+      // Studio fotografico: softbox convertiti in mappa di riflessione
       const pmrem = new THREE.PMREMGenerator(renderer);
       const envScene = new THREE.Scene();
+      envScene.background = new THREE.Color(0x000000);
       const mats = [];
       const box = (w, h, k, x, y, z, ry = 0, rx = 0) => {
         const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide });
@@ -657,62 +674,215 @@
         mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, 0);
         envScene.add(mesh);
       };
-      box(2.2, 12, 3, -6, 0, 2, Math.PI / 2);
-      box(0.3, 12, 5, 6, 0, 0.5, -Math.PI / 2);
-      box(4, 4, 1.2, 0, 7, 0, 0, Math.PI / 2);
+      box(2.6, 12, 4, -6, 0, 2, Math.PI / 2);       // softbox grande a sinistra
+      box(0.35, 12, 7, 6, 0, 0.5, -Math.PI / 2);    // striscia netta a destra
+      box(1.2, 12, 2.5, 3.5, 0, -6);                // striscia posteriore
+      box(5, 5, 2, 0, 7, 0, 0, Math.PI / 2);        // dall'alto
+      box(9, 6, 0.06, 0, 0, 9);                     // riempimento frontale tenue
       const envMap = pmrem.fromScene(envScene, 0.03).texture;
       mats.forEach((m) => m.dispose());
       pmrem.dispose();
 
+      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+      const key = new THREE.DirectionalLight(0xffffff, 1.5);
+      key.position.set(-5, 3, 5);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0xffffff, 1.6);
+      rim.position.set(5, 2, -6);
+      scene.add(rim);
+      const fill = new THREE.DirectionalLight(0xffffff, 0.55);
+      fill.position.set(3, -1, 6);
+      scene.add(fill);
+
       const bottle = new THREE.Group();
       scene.add(bottle);
 
-      // Superficie: la foto (già illuminata) senza luci aggiuntive
-      const photoMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-      // Lucentezza: solo i riflessi speculari, sommati sopra la foto
-      const glossMat = new THREE.MeshStandardMaterial({
-        color: 0x000000, metalness: 0, roughness: 0.08, envMap, envMapIntensity: 0.55,
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+      // segnaposto 1x1 (le mappe vere arrivano dopo, senza ricompilare gli shader)
+      const px = (r, g, b, enc) => {
+        const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1, THREE.RGBAFormat);
+        if (enc) t.encoding = enc;
+        t.needsUpdate = true;
+        return t;
+      };
+      const colorPh = px(20, 20, 20, THREE.sRGBEncoding);
+      const matPh = px(255, 15, 0);
+
+      const bottleMat = new (lowPower ? THREE.MeshStandardMaterial : THREE.MeshPhysicalMaterial)({
+        color: 0xffffff,
+        map: colorPh,
+        // la foto (già illuminata) dà corpo a etichette e vetro colorato
+        emissive: 0xffffff,
+        emissiveMap: colorPh,
+        emissiveIntensity: 0.3,
+        roughness: 1, roughnessMap: matPh,           // canale G
+        metalness: 1, metalnessMap: matPh,           // canale B
+        ...(lowPower ? {} : { clearcoat: 1, clearcoatMap: matPh, clearcoatRoughness: 0.03 }),  // canale R
+        envMap,
+        envMapIntensity: 1.6
       });
-      // Riflesso a terra
+
+      // Controluce: bordi del vetro illuminati dal colore del liquido
+      // (solo sul vetro, non su etichette e capsula; sopra il livello resta grigio)
+      const rimMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uMat: { value: matPh },
+          uLiquid: { value: new THREE.Color(0x7a0c1c) },
+          uGlass: { value: new THREE.Color(0x3a3a3a) },
+          uLevel: { value: 1.2 },
+          uK: { value: 1 }
+        },
+        vertexShader: `
+          varying vec3 vN; varying vec3 vV; varying float vY; varying vec2 vUv;
+          void main() {
+            vUv = uv; vY = position.y;
+            vN = normalize(normalMatrix * normal);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vV = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform sampler2D uMat; uniform vec3 uLiquid; uniform vec3 uGlass; uniform float uLevel; uniform float uK;
+          varying vec3 vN; varying vec3 vV; varying float vY; varying vec2 vUv;
+          void main() {
+            float glass = smoothstep(0.55, 0.95, texture2D(uMat, vUv).r);
+            float f = pow(1.0 - clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 3.6);
+            vec3 c = mix(uLiquid, uGlass, smoothstep(uLevel - 0.08, uLevel + 0.08, vY));
+            gl_FragColor = vec4(c * f * glass * uK, 1.0);
+          }`,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      // Riflesso sul piano: copia capovolta che sfuma verso il basso
+      const reflMat = new THREE.ShaderMaterial({
+        uniforms: { map: { value: colorPh } },
+        vertexShader: `
+          varying vec2 vUv; varying float vWY;
+          void main() {
+            vUv = uv;
+            vec4 w = modelMatrix * vec4(position, 1.0);
+            vWY = w.y;
+            gl_Position = projectionMatrix * viewMatrix * w;
+          }`,
+        fragmentShader: `
+          uniform sampler2D map; varying vec2 vUv; varying float vWY;
+          void main() {
+            vec3 c = texture2D(map, vUv).rgb;
+            float a = 0.16 * smoothstep(-4.6, -3.0, vWY);
+            gl_FragColor = vec4(c, a);
+          }`,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+
+      // Etichette: strato a parte, appena sopra il vetro, con la foto originale
+      // ad alta risoluzione e i suoi colori esatti (senza luci né tone mapping:
+      // la carta resta nitida e leggibile)
+      const labelMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff, map: colorPh, alphaMap: matPh, transparent: true, toneMapped: false
+      });
+
+      // Ombra di contatto morbida
       const shadowCanvas = document.createElement('canvas');
       shadowCanvas.width = shadowCanvas.height = 128;
       const sctx = shadowCanvas.getContext('2d');
       const grd = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grd.addColorStop(0, 'rgba(255,255,255,0.22)');
+      grd.addColorStop(0, 'rgba(255,255,255,0.16)');
       grd.addColorStop(1, 'rgba(255,255,255,0)');
       sctx.fillStyle = grd; sctx.fillRect(0, 0, 128, 128);
       const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(4.2, 1.1),
+        new THREE.PlaneGeometry(5, 1.3),
         new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false })
       );
       floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -3.02;
+      floor.position.y = -3.01;
       scene.add(floor);
 
       const loader = new THREE.TextureLoader();
-      const segments = lowPower ? 96 : 160;
+      const segments = lowPower ? 112 : 192;
+      const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
-      const setBottle = (profile, tex) => {
-        bottle.children.slice().forEach((c) => { bottle.remove(c); c.geometry.dispose(); });
+      const setBottle = (data, colorTex, matTex, labTex, alphaTex) => {
+        const profile = data.p;
+        bottle.children.slice().forEach((c) => { bottle.remove(c); if (c.userData.own) c.geometry.dispose(); });
         const pts = [new THREE.Vector2(0, profile[0][1])]
           .concat(profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y)))
           .concat([new THREE.Vector2(0, profile[profile.length - 1][1])]);
         const geo = new THREE.LatheGeometry(pts, segments);
-        // coordinate verticali della texture = altezza reale (non l'indice del punto)
+        // coordinata verticale della texture = altezza reale (non l'indice del punto)
         const pos = geo.attributes.position;
         const uv = geo.attributes.uv;
         for (let i = 0; i < pos.count; i++) uv.setY(i, clamp((pos.getY(i) + 3) / 6, 0, 1));
         uv.needsUpdate = true;
-        if (photoMat.map && photoMat.map !== tex) photoMat.map.dispose();
-        photoMat.map = tex;
-        photoMat.needsUpdate = true;
-        bottle.add(new THREE.Mesh(geo, photoMat));
-        const gloss = new THREE.Mesh(geo, glossMat);
-        gloss.scale.setScalar(1.004);
-        bottle.add(gloss);
-        // larghezza massima → per centrare bene bottiglie basse e larghe
+
+        [bottleMat.map, bottleMat.roughnessMap].forEach((t) => { if (t && t !== colorPh && t !== matPh) t.dispose(); });
+        colorTex.encoding = THREE.sRGBEncoding;
+        [colorTex, matTex].forEach((t) => {
+          t.wrapS = THREE.RepeatWrapping;
+          t.anisotropy = Math.min(8, maxAniso);
+        });
+        bottleMat.map = bottleMat.emissiveMap = colorTex;
+        bottleMat.roughnessMap = bottleMat.metalnessMap = matTex;
+        if (!lowPower) bottleMat.clearcoatMap = matTex;
+        rimMat.uniforms.uMat.value = matTex;
+        reflMat.uniforms.map.value = colorTex;
+        const liq = LIQUIDI[data.liq] || LIQUIDI.rosso;
+        rimMat.uniforms.uLiquid.value.setHex(liq.c);
+        rimMat.uniforms.uK.value = liq.k;
+        rimMat.uniforms.uLevel.value = (data.cap || 1.5) - 0.5;
+
+        const body = new THREE.Mesh(geo, bottleMat);
+        body.userData.own = true;
+        bottle.add(body);
+        const rimMesh = new THREE.Mesh(geo, rimMat);
+        rimMesh.scale.setScalar(1.006);
+        rimMesh.renderOrder = 2;
+        bottle.add(rimMesh);
+        const refl = new THREE.Mesh(geo, reflMat);
+        refl.scale.y = -1;
+        refl.position.y = -6.02;                   // specchiata rispetto al piano (y = -3)
+        bottle.add(refl);
         bottle.userData.maxR = Math.max(...profile.map((p) => p[0]));
+
+        // strato etichette: solo la fascia del corpo dove ci sono etichette
+        [labelMat.map, labelMat.alphaMap].forEach((t) => { if (t && t !== colorPh && t !== matPh) t.dispose(); });
+        if (data.lab && labTex && alphaTex) {
+          const [v0, v1] = data.lab;
+          const y0 = v0 * 6 - 3;
+          const y1 = v1 * 6 - 3;
+          const rAt = (y) => {            // raggio interpolato all'altezza y
+            for (let i = 1; i < profile.length; i++) {
+              if (profile[i][1] >= y) {
+                const [r0, ya] = profile[i - 1];
+                const [r1, yb] = profile[i];
+                return r0 + (r1 - r0) * ((y - ya) / ((yb - ya) || 1));
+              }
+            }
+            return profile[profile.length - 1][0];
+          };
+          const lp = [new THREE.Vector2(rAt(y0) + 0.004, y0)];
+          profile.forEach(([r, y]) => { if (y > y0 && y < y1) lp.push(new THREE.Vector2(r + 0.004, y)); });
+          lp.push(new THREE.Vector2(rAt(y1) + 0.004, y1));
+          const lgeo = new THREE.LatheGeometry(lp, segments);
+          const lpos = lgeo.attributes.position;
+          const luv = lgeo.attributes.uv;
+          for (let i = 0; i < lpos.count; i++) luv.setY(i, clamp(((lpos.getY(i) + 3) / 6 - v0) / (v1 - v0), 0, 1));
+          luv.needsUpdate = true;
+          labTex.encoding = THREE.sRGBEncoding;
+          [labTex, alphaTex].forEach((t) => {
+            t.wrapS = THREE.RepeatWrapping;
+            t.anisotropy = maxAniso;
+          });
+          labelMat.map = labTex;
+          labelMat.alphaMap = alphaTex;
+          labelMat.needsUpdate = true;
+          const labels = new THREE.Mesh(lgeo, labelMat);
+          labels.userData.own = true;
+          labels.renderOrder = 1;
+          bottle.add(labels);
+        }
       };
 
       const resize = () => {
@@ -720,21 +890,23 @@
         const h = stage.clientHeight || 1;
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
-        // inquadra la bottiglia intera, anche su schermi stretti
-        const fitH = 8.3;                 // bottiglia (6) + spazio per suggerimento e pulsanti
-        const fitW = (bottle.userData.maxR || 1) * 2 + 2.2;
+        // inquadra la bottiglia intera (più spazio sotto per riflesso e pulsanti)
+        const fitH = 8.4;
+        const fitW = (bottle.userData.maxR || 1) * 2 + 2.4;
         const vFov = THREE.MathUtils.degToRad(camera.fov);
         const distH = fitH / 2 / Math.tan(vFov / 2);
         const distW = fitW / 2 / (Math.tan(vFov / 2) * camera.aspect);
-        camera.position.set(0, -0.3, Math.max(distH, distW));
-        camera.lookAt(0, -0.3, 0);         // bottiglia un po' più in alto dei pulsanti
+        const dist = Math.max(distH, distW);
+        // camera appena sopra il centro: si vede un filo di spalla e il piano
+        camera.position.set(0, 0.9, dist);
+        camera.lookAt(0, -0.35, 0);
         camera.updateProjectionMatrix();
       };
       window.addEventListener('resize', () => { if (dlg.open) { resize(); render(); } });
 
       const render = () => renderer.render(scene, camera);
 
-      three = { THREE, renderer, scene, camera, bottle, loader, setBottle, resize, render, floor };
+      three = { THREE, renderer, scene, camera, bottle, loader, setBottle, resize, render, lowPower };
       bindDrag();
       return three;
     };
@@ -746,22 +918,16 @@
       const dt = Math.min((now - (lastT || now)) / 16.7, 3);   // in "fotogrammi a 60 fps"
       lastT = now;
       if (!state.dragging) {
-        if (state.target !== null) {
-          const d = state.target - state.rot;
-          state.rot += d * (1 - Math.pow(0.86, dt));
-          if (Math.abs(d) < 0.002) { state.rot = state.target; state.target = null; }
-        } else if (Math.abs(state.vel) > 0.0005) {
-          state.rot += state.vel * dt;
-          state.vel *= Math.pow(0.94, dt);                       // inerzia
-        } else if (!prefersReducedMotion()) {
-          if (!state.auto && now - state.idleAt > 3500) state.auto = true;
-          if (state.auto) state.rot += 0.0045 * dt;              // rotazione lenta automatica
+        if (Math.abs(state.vel) > 0.0003) {
+          state.goal += state.vel * dt;                       // inerzia
+          state.vel *= Math.pow(0.93, dt);
+        } else if (!prefersReducedMotion() && now - state.idleAt > 4000) {
+          state.auto = Math.min(1, state.auto + 0.008 * dt);  // riparte piano piano
+          state.goal += 0.0032 * state.auto * dt;             // rotazione lenta automatica
         }
-        state.tiltT *= Math.pow(0.95, dt);
       }
-      state.tilt += (state.tiltT - state.tilt) * (1 - Math.pow(0.85, dt));
+      state.rot += (state.goal - state.rot) * (1 - Math.pow(0.84, dt));
       three.bottle.rotation.y = state.rot;
-      three.bottle.rotation.x = state.tilt;
       updateViewButtons();
       three.render();
     };
@@ -808,8 +974,8 @@
       renderInfo(p);
       btnPhotos.hidden = !images.length;
 
-      // stato iniziale: bottiglia di fronte, leggermente ruotata, che "entra"
-      Object.assign(state, { rot: -0.9, vel: 0, tilt: 0, tiltT: 0, target: 0, auto: false, idleAt: performance.now(), dragging: false });
+      // stato iniziale: bottiglia di tre quarti che ruota verso il fronte
+      Object.assign(state, { rot: -1.1, goal: 0, vel: 0, dragging: false, auto: 0, idleAt: performance.now() });
       hint.classList.remove('is-hidden');
       stage.classList.add('is-loading');
 
@@ -828,17 +994,19 @@
       t.resize();
       t.render();
 
-      const texPromise = new Promise((resolve, reject) => {
-        t.loader.load(asset(`assets/prodotti/3d/${slug}.jpg`), resolve, undefined, reject);
+      const tex = (file) => new Promise((resolve, reject) => {
+        t.loader.load(asset(`assets/prodotti/3d/${file}`), resolve, undefined, reject);
       });
-      Promise.all([loadProfiles(), texPromise]).then(([profiles, tex]) => {
-        if (my !== token) { tex.dispose(); return; }
-        const profile = profiles[slug];
-        if (!profile) throw new Error('profilo mancante');
-        tex.encoding = t.THREE.sRGBEncoding;
-        tex.anisotropy = Math.min(8, t.renderer.capabilities.getMaxAnisotropy());
-        tex.wrapS = t.THREE.RepeatWrapping;
-        t.setBottle(profile, tex);
+      // etichette: risoluzione piena su computer, metà su telefoni/tablet
+      const optional = (file) => tex(file).catch(() => null);
+      Promise.all([
+        loadProfiles(), tex(`${slug}.jpg`), tex(`${slug}-m.png`),
+        optional(t.lowPower ? `${slug}-e2.jpg` : `${slug}-e.jpg`), optional(`${slug}-a.png`)
+      ]).then(([profiles, colorTex, matTex, labTex, alphaTex]) => {
+        if (my !== token) { [colorTex, matTex, labTex, alphaTex].forEach((x) => x && x.dispose()); return; }
+        const data = profiles[slug];
+        if (!data || !data.p) throw new Error('profilo mancante');
+        t.setBottle(data, colorTex, matTex, labTex, alphaTex);
         t.bottle.visible = true;
         t.resize();
         stage.classList.remove('is-loading');
