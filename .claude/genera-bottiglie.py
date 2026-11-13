@@ -42,10 +42,13 @@ PRODOTTI = {
 ETICHETTE_MANUALI = {
     'kalanero': {'fronte': [(0.07, 0.36)], 'retro': [(0.07, 0.36)]},
     'amaro-korva': {'fronte': [(0.06, 0.52)], 'retro': [(0.06, 0.52)]},
-    # (da, a, larghezza max in sin) per etichette più strette della bottiglia
-    'dalia-rosato': {'fronte': [(0.05, 0.36)], 'retro': [(0.07, 0.36, 0.82)]},
-    'calasulu-rosato': {'fronte': [(0.15, 0.53, 0.9)], 'retro': [(0.2, 0.49, 0.86)]},
+
 }
+
+# Etichette scure (nere su vetro scuro): niente rifinitura automatica dei bordi
+ETICHETTE_SCURE = {'kalanero', 'amaro-korva'}
+# larghezza massima (in sin dell'angolo) se il riconoscimento la sovrastima
+LARGHEZZA_MAX = {('dalia-rosato', 'retro'): 0.8}
 
 WORK_H = 2400          # altezza di lavoro delle foto
 N_PROFILE = 200
@@ -56,6 +59,34 @@ MAT_W, MAT_H = 512, 512
 EDGE = 0.965           # oltre questo |sin| la foto è troppo schiacciata
 
 
+# Prospettiva: le foto sono scattate un po' dall'alto, quindi un cerchio
+# orizzontale della bottiglia appare come un'ellisse (il punto più vicino
+# all'obiettivo sta più in basso dei lati). Spostamento verticale in pixel:
+#   dy = e(t) * R * cos(angolo),   e(t) = e_fondo * (1 - t / TC)
+# e_fondo si misura sull'ellisse del fondo di ogni foto; TC = altezza (0..1)
+# a cui si trovava l'obiettivo (lì l'ellisse è una linea).
+TC = 1.15
+
+
+def elev_px(D, t, R, s):
+    e = D['eb'] * np.clip(1 - np.asarray(t) / TC, 0, None)
+    return e * R * np.sqrt(np.clip(1 - np.asarray(s) ** 2, 0, 1))
+
+
+def measure_eb(im, cx, top, bot, rad):
+    """Inclinazione dell'obiettivo misurata sull'ellisse del fondo."""
+    bg = np.concatenate([im[:, 8:30], im[:, -30:-8]], axis=1).mean(axis=1, keepdims=True)
+    fg = (np.abs(im - bg).max(axis=2) > 12) | ((im.max(2) - im.min(2)) > 20)
+    R = np.median(rad[bot - int((bot - top) * 0.2):bot - int((bot - top) * 0.05)])
+    def lowest(sv):
+        idx = np.nonzero(fg[top:, int(cx + sv * R)])[0]
+        return top + idx[-1] if len(idx) else bot
+    yc = np.median([lowest(v) for v in (-0.1, 0, 0.1)])
+    ys = np.median([lowest(v) for v in (-0.75, -0.7, 0.7, 0.75)])
+    e = (yc - ys) / (R * (1 - math.sqrt(1 - 0.725 ** 2)))
+    return float(np.clip(e, 0.22, 0.4)) if 0.15 < e < 0.5 else 0.32
+
+
 def load_full(name):
     im = Image.open(os.path.join(SRC, name))
     if im.mode == 'RGBA':
@@ -64,6 +95,7 @@ def load_full(name):
 
 
 def label_texture(slug, F, B, imF, imB, has_back, scale_units):
+    imF_full, imB_full = imF, imB
     """Texture ad alta risoluzione delle sole etichette (fronte + retro) dalle
     foto originali, con maschera alfa a bordi netti."""
     rects = [(r, 1) for r in F['rects']] + [(r, -1) for r in B['rects']]
@@ -96,7 +128,7 @@ def label_texture(slug, F, B, imF, imB, has_back, scale_units):
             R = np.interp(y, np.arange(len(D['rad'])), D['rad'])
             ss = np.clip(sv, -EDGE, EDGE)
             xs = (D['cx'] + R[:, None] * ss[None, :]) * fs
-            ys = (y[:, None] * np.ones_like(ss)[None, :]) * fs
+            ys = (y[:, None] + elev_px(D, t[:, None], R[:, None], ss[None, :])) * fs
             c = bilinear(full, xs, ys)
             blk = tex[j][:, ci]
             blk[m] = np.clip(c[m], 0, 255).astype(np.uint8)
@@ -104,7 +136,53 @@ def label_texture(slug, F, B, imF, imB, has_back, scale_units):
             a = alpha[j][:, ci]
             a[m] = 255
             alpha[j[:, None], ci[None, :]] = a
-    # bordo: dilata il colore di qualche texel sotto la maschera (niente aloni)
+    # Bordi alto/basso curvi (foto scattata un po' dall'alto): colonna per
+    # colonna si tolgono i pixel "uguali al vetro" partendo dal bordo
+    # dell'etichetta verso l'interno (solo nel 18% esterno, così i disegni
+    # interni dello stesso colore del vetro restano).
+    if slug not in ETICHETTE_SCURE:
+        tt = tmax - (np.arange(Lh) + 0.5) / Lh * (tmax - tmin)
+        rowsN = np.clip(((1 - tt) * TEX_H).astype(int), 0, TEX_H - 1)
+        for D, cols in ((F, cphi >= 0), (B, cphi < 0)):
+            g = D['glass'][rowsN]                                  # Lh x 3
+            def med(v, w=25):
+                pad = np.pad(v, w, mode='edge')
+                return np.array([np.median(pad[i:i + 2 * w + 1]) for i in range(len(v))])
+            # bordi laterali: stessa cosa riga per riga, dentro la metà della foto
+            seg_cols = np.nonzero(cols)[0]
+            # la metà frontale è spezzata in due (0..90° e 270..360°): la si
+            # riordina in un'unica striscia continua da sinistra a destra
+            if cphi[0] >= 0:
+                split = np.nonzero(np.diff(seg_cols) > 1)[0]
+                if len(split):
+                    k0 = split[0] + 1
+                    seg_cols = np.concatenate([seg_cols[k0:], seg_cols[:k0]])
+            sub_a = alpha[:, seg_cols] > 0
+            sub_t = tex[:, seg_cols].astype(np.float32)
+            dl = np.zeros(Lh); dr = np.zeros(Lh)
+            for r in range(Lh):
+                a = sub_a[r]
+                if not a.any():
+                    continue
+                idx = np.nonzero(a)[0]
+                x0, x1 = idx[0], idx[-1]
+                zone = int((x1 - x0) * 0.08)
+                like = np.abs(sub_t[r, x0:x1 + 1] - g[r]).max(axis=1) < 48
+                d = 0
+                while d < zone and like[d]: d += 1
+                dl[r] = d
+                d = 0
+                while d < zone and like[len(like) - 1 - d]: d += 1
+                dr[r] = d
+            dl = med(dl); dr = med(dr)
+            for r in range(Lh):
+                a = sub_a[r]
+                if not a.any():
+                    continue
+                idx = np.nonzero(a)[0]
+                x0, x1 = idx[0], idx[-1]
+                if dl[r] > 0: alpha[r, seg_cols[x0:x0 + int(dl[r])]] = 0
+                if dr[r] > 0: alpha[r, seg_cols[x1 - int(dr[r]) + 1:x1 + 1]] = 0
     img = Image.fromarray(tex)
     img.save(os.path.join(OUT, slug + '-e.jpg'), quality=86, optimize=True, progressive=True)
     img.resize((LAB_W_MOBILE, Lh // 2), Image.LANCZOS).save(
@@ -178,10 +256,11 @@ def smooth1d(a, sigma):
     return np.stack([smooth1d(a[:, i], sigma) for i in range(a.shape[1])], axis=1)
 
 
-def analyze(im, manual=None):
+def analyze(im, manual=None, smax_cap=None):
     """Per ogni altezza t (0 fondo .. 1 cima, N campioni): raggio, colore del
     vetro/capsula senza riflessi, maschera etichetta in funzione di sin(angolo)."""
     cx, top, bot, rad = silhouette(im)
+    eb = measure_eb(im, cx, top, bot, rad)
     hgt = bot - top
     N = TEX_H
     t = 1 - (np.arange(N) + 0.5) / N                 # riga 0 = sommità
@@ -189,7 +268,7 @@ def analyze(im, manual=None):
     R = np.interp(ys, np.arange(len(rad)), rad)
     S = np.linspace(-EDGE, EDGE, 257)                # sin(angolo) campionati
     xs = cx + R[:, None] * S[None, :]
-    yy = ys[:, None] * np.ones_like(xs)
+    yy = ys[:, None] + elev_px({'eb': eb}, t[:, None], R[:, None], S[None, :])
     col = bilinear(im, xs, yy)                       # N x 257 x 3
     L = col.mean(axis=2)
     sat = col.max(axis=2) - col.min(axis=2)
@@ -244,6 +323,7 @@ def analyze(im, manual=None):
         diff = np.abs(col - glass[:, None, :]).max(axis=2) > 55
         frac2 = diff[:, centre].mean(axis=1)
         runs = runs_of((smooth1d(frac2.astype(float), N * 0.004) > 0.5) & body)
+        runs = [r for r in runs if (1 - r[0] / N) > 0.07]      # niente "etichette" sul fondo
     glass, inrun = glass_outside(runs)
     merged = runs
     # estensione orizzontale di ogni etichetta
@@ -265,9 +345,12 @@ def analyze(im, manual=None):
         else:
             l = l + 1 if l > 0 else l
             r = r - 1 if r < len(S) - 1 else r
+        if smax_cap:
+            l = max(l, int(np.searchsorted(S, -smax_cap)))
+            r = min(r, int(np.searchsorted(S, smax_cap)) - 1)
         mask[a:b, l:r + 1] = True
         rects.append((1 - (b - 0.5) / N, 1 - (a + 0.5) / N, float(S[l]), float(S[r])))
-    return dict(cx=cx, top=top, bot=bot, rad=rad, R=R, S=S, t=t, ys=ys, mask=mask, rects=rects,
+    return dict(eb=eb, cx=cx, top=top, bot=bot, rad=rad, R=R, S=S, t=t, ys=ys, mask=mask, rects=rects,
                 glass=glass, runs=merged, inrun=inrun)
 
 
@@ -292,10 +375,10 @@ def capsule_bottom(glassF, R, N):
 def build(slug, fronte, retro, liquido):
     man = ETICHETTE_MANUALI.get(slug, {})
     imF = load(fronte)
-    F = analyze(imF, man.get('fronte'))
+    F = analyze(imF, man.get('fronte'), LARGHEZZA_MAX.get((slug, 'fronte')))
     if retro:
         imB = load(retro)
-        B = analyze(imB, man.get('retro'))
+        B = analyze(imB, man.get('retro'), LARGHEZZA_MAX.get((slug, 'retro')))
     else:
         imB, B = imF, F
     N = TEX_H
@@ -313,6 +396,9 @@ def build(slug, fronte, retro, liquido):
     # stesso vetro: media fronte/retro, solo dove nessuna delle due ha l'etichetta
     glass = (F['glass'] + B['glass']) / 2
     bad = F['inrun'] | B['inrun']
+    # fondo (ultimo 12%): nella foto è scurito da ombre e spessore del vetro e
+    # creerebbe una fascia; prende il colore del vetro pulito più in basso
+    bad |= np.arange(N) > N * 0.88
     ok = np.nonzero(~bad)[0]
     if len(ok) > 2:
         for ch in range(3):
@@ -329,7 +415,7 @@ def build(slug, fronte, retro, liquido):
             return
         rowsI = np.nonzero(m.any(axis=1))[0]
         xs = D['cx'] + D['R'][rowsI, None] * ss[None, :]
-        yy = D['ys'][rowsI, None] * np.ones_like(xs)
+        yy = D['ys'][rowsI, None] + elev_px(D, D['t'][rowsI, None], D['R'][rowsI, None], ss[None, :])
         sample = bilinear(im, xs, yy)
         sub = m[rowsI][..., None]
         blk = tex[rowsI][:, cols]

@@ -505,7 +505,20 @@
           sc.src = asset('assets/prodotti/3d/bottiglie.js');
           sc.async = true;
           sc.onload = () => (window.SFM_BOTTIGLIE ? resolve(window.SFM_BOTTIGLIE) : reject(new Error('dati')));
-          sc.onerror = () => { profilesPromise = null; reject(new Error('rete')); };
+          let tries = 0;
+          sc.onerror = () => {
+            if (tries++ < 3) {          // nuovo tentativo (errore momentaneo del server)
+              const again = document.createElement('script');
+              again.src = asset('assets/prodotti/3d/bottiglie.js') + `?r=${tries}`;
+              again.async = true;
+              again.onload = sc.onload;
+              again.onerror = sc.onerror;
+              setTimeout(() => document.head.appendChild(again), 400 * tries);
+              return;
+            }
+            profilesPromise = null;
+            reject(new Error('rete'));
+          };
           document.head.appendChild(sc);
         });
       }
@@ -754,29 +767,6 @@
         depthWrite: false
       });
 
-      // Riflesso sul piano: copia capovolta che sfuma verso il basso
-      const reflMat = new THREE.ShaderMaterial({
-        uniforms: { map: { value: colorPh } },
-        vertexShader: `
-          varying vec2 vUv; varying float vWY;
-          void main() {
-            vUv = uv;
-            vec4 w = modelMatrix * vec4(position, 1.0);
-            vWY = w.y;
-            gl_Position = projectionMatrix * viewMatrix * w;
-          }`,
-        fragmentShader: `
-          uniform sampler2D map; varying vec2 vUv; varying float vWY;
-          void main() {
-            vec3 c = texture2D(map, vUv).rgb;
-            float a = 0.16 * smoothstep(-4.6, -3.0, vWY);
-            gl_FragColor = vec4(c, a);
-          }`,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide
-      });
-
       // Etichette: strato a parte, appena sopra il vetro, con la foto originale
       // ad alta risoluzione e i suoi colori esatti (senza luci né tone mapping:
       // la carta resta nitida e leggibile)
@@ -784,31 +774,67 @@
         color: 0xffffff, map: colorPh, alphaMap: matPh, transparent: true, toneMapped: false
       });
 
-      // Ombra di contatto morbida
-      const shadowCanvas = document.createElement('canvas');
-      shadowCanvas.width = shadowCanvas.height = 128;
-      const sctx = shadowCanvas.getContext('2d');
-      const grd = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grd.addColorStop(0, 'rgba(255,255,255,0.16)');
-      grd.addColorStop(1, 'rgba(255,255,255,0)');
-      sctx.fillStyle = grd; sctx.fillRect(0, 0, 128, 128);
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(5, 1.3),
-        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false })
+      // Piano: alone di luce morbido e ombra di contatto scura sotto la bottiglia
+      const radial = (stops) => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const x = c.getContext('2d');
+        const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+        stops.forEach(([o, col]) => g.addColorStop(o, col));
+        x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+      };
+      const glow = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.5, 2.2),
+        new THREE.MeshBasicMaterial({
+          map: radial([[0, 'rgba(255,255,255,0.09)'], [0.5, 'rgba(255,255,255,0.035)'], [1, 'rgba(255,255,255,0)']]),
+          transparent: true, depthWrite: false, toneMapped: false
+        })
       );
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -3.01;
-      scene.add(floor);
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.y = -3.02;
+      scene.add(glow);
+      const contact = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: radial([[0, 'rgba(0,0,0,0.85)'], [0.35, 'rgba(0,0,0,0.55)'], [0.7, 'rgba(0,0,0,0.15)'], [1, 'rgba(0,0,0,0)']]),
+          transparent: true, depthWrite: false, toneMapped: false
+        })
+      );
+      contact.rotation.x = -Math.PI / 2;
+      contact.position.y = -3.005;
+      scene.add(contact);
 
       const loader = new THREE.TextureLoader();
       const segments = lowPower ? 112 : 192;
       const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
+      // Fondo della bottiglia rimodellato: nella foto il fondo è confuso da
+      // ombre e riflessi, quindi gli ultimi millimetri del profilo vengono
+      // sostituiti da un tallone arrotondato con il classico fondo rientrante.
+      const withBase = (raw) => {
+        const CUT = -2.72;                                     // sopra: profilo dalla foto
+        const ref = raw.filter(([, y]) => y >= CUT && y <= CUT + 0.35).map(([r]) => r).sort((a, b) => a - b);
+        const R = ref.length ? ref[Math.floor(ref.length / 2)] : raw[0][0];
+        const heel = [
+          [0, -2.84], [R * 0.3, -2.855], [R * 0.55, -2.91], [R * 0.72, -2.975], [R * 0.82, -3.0],
+          [R * 0.9, -2.996], [R * 0.955, -2.982], [R * 0.985, -2.955], [R * 0.998, -2.915], [R, -2.86]
+        ];
+        // raccordo morbido verso il profilo della foto
+        const above = raw.filter(([, y]) => y > CUT);
+        const blend = above.map(([r, y]) => {
+          const k = Math.min(1, (y - CUT) / 0.3);
+          return [R + (r - R) * k, y];
+        });
+        return heel.concat([[R, CUT]]).concat(blend);
+      };
+
       const setBottle = (data, colorTex, matTex, labTex, alphaTex) => {
-        const profile = data.p;
+        colorTex = colorTex || colorPh;
+        matTex = matTex || matPh;
+        const profile = withBase(data.p);
         bottle.children.slice().forEach((c) => { bottle.remove(c); if (c.userData.own) c.geometry.dispose(); });
-        const pts = [new THREE.Vector2(0, profile[0][1])]
-          .concat(profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y)))
+        const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.001), y))
           .concat([new THREE.Vector2(0, profile[profile.length - 1][1])]);
         const geo = new THREE.LatheGeometry(pts, segments);
         // coordinata verticale della texture = altezza reale (non l'indice del punto)
@@ -827,7 +853,6 @@
         bottleMat.roughnessMap = bottleMat.metalnessMap = matTex;
         if (!lowPower) bottleMat.clearcoatMap = matTex;
         rimMat.uniforms.uMat.value = matTex;
-        reflMat.uniforms.map.value = colorTex;
         const liq = LIQUIDI[data.liq] || LIQUIDI.rosso;
         rimMat.uniforms.uLiquid.value.setHex(liq.c);
         rimMat.uniforms.uK.value = liq.k;
@@ -840,11 +865,8 @@
         rimMesh.scale.setScalar(1.006);
         rimMesh.renderOrder = 2;
         bottle.add(rimMesh);
-        const refl = new THREE.Mesh(geo, reflMat);
-        refl.scale.y = -1;
-        refl.position.y = -6.02;                   // specchiata rispetto al piano (y = -3)
-        bottle.add(refl);
         bottle.userData.maxR = Math.max(...profile.map((p) => p[0]));
+        contact.scale.set(bottle.userData.maxR * 2.9, bottle.userData.maxR * 1.25, 1);
 
         // strato etichette: solo la fascia del corpo dove ci sono etichette
         [labelMat.map, labelMat.alphaMap].forEach((t) => { if (t && t !== colorPh && t !== matPh) t.dispose(); });
@@ -994,14 +1016,21 @@
       t.resize();
       t.render();
 
-      const tex = (file) => new Promise((resolve, reject) => {
-        t.loader.load(asset(`assets/prodotti/3d/${file}`), resolve, undefined, reject);
+      // Caricamento con nuovi tentativi: GitHub Pages a volte risponde 503
+      // per un istante; si riprova (fino a 4 volte) prima di arrendersi.
+      const tex = (file, attempt = 0) => new Promise((resolve, reject) => {
+        const url = asset(`assets/prodotti/3d/${file}`) + (attempt ? `?r=${attempt}` : '');
+        t.loader.load(url, resolve, undefined, reject);
+      }).catch((err) => {
+        if (attempt >= 3) throw err;
+        return new Promise((r) => setTimeout(r, 350 * (attempt + 1) ** 2)).then(() => tex(file, attempt + 1));
       });
-      // etichette: risoluzione piena su computer, metà su telefoni/tablet
       const optional = (file) => tex(file).catch(() => null);
       Promise.all([
-        loadProfiles(), tex(`${slug}.jpg`), tex(`${slug}-m.png`),
-        optional(t.lowPower ? `${slug}-e2.jpg` : `${slug}-e.jpg`), optional(`${slug}-a.png`)
+        loadProfiles(),
+        optional(`${slug}.jpg`), optional(`${slug}-m.png`),          // vetro: se mancano, colori di base
+        tex(t.lowPower ? `${slug}-e2.jpg` : `${slug}-e.jpg`),          // etichette: risoluzione piena su computer
+        tex(`${slug}-a.png`)
       ]).then(([profiles, colorTex, matTex, labTex, alphaTex]) => {
         if (my !== token) { [colorTex, matTex, labTex, alphaTex].forEach((x) => x && x.dispose()); return; }
         const data = profiles[slug];
